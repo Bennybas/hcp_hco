@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { MoveUpRight } from "lucide-react"
+import { ArrowBigDown, ChevronDown, MoveUpRight } from "lucide-react"
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
 
 const HCPlandscape = () => {
@@ -134,14 +134,30 @@ const HCPlandscape = () => {
       }
     })
 
+    // Create a map to track unique HCP IDs for each segment and age group
+    const segmentAgeHcpMap = new Map()
+
     data.forEach((item) => {
-      if (item.age_group === "0 to 2") {
-        ageGroupCounts[item.hcp_segment]["<2"]++
-      } else if (item.age_group === "3 to 17") {
-        ageGroupCounts[item.hcp_segment]["3-17"]++
-      } else if (item.age_group === "Above 18") {
-        ageGroupCounts[item.hcp_segment][">18"]++
+      if (item.hcp_segment && item.hcp_id && item.age_group) {
+        const key = `${item.hcp_segment}_${item.age_group}`
+
+        if (!segmentAgeHcpMap.has(key)) {
+          segmentAgeHcpMap.set(key, new Set())
+        }
+
+        segmentAgeHcpMap.get(key).add(item.hcp_id)
       }
+    })
+
+    // Update counts based on unique HCP IDs
+    segments.forEach((segment) => {
+      const under2Key = `${segment}_0 to 2`
+      const age3to17Key = `${segment}_3 to 17`
+      const above18Key = `${segment}_Above 18`
+
+      ageGroupCounts[segment]["<2"] = segmentAgeHcpMap.has(under2Key) ? segmentAgeHcpMap.get(under2Key).size : 0
+      ageGroupCounts[segment]["3-17"] = segmentAgeHcpMap.has(age3to17Key) ? segmentAgeHcpMap.get(age3to17Key).size : 0
+      ageGroupCounts[segment][">18"] = segmentAgeHcpMap.has(above18Key) ? segmentAgeHcpMap.get(above18Key).size : 0
     })
 
     return Object.values(ageGroupCounts)
@@ -168,13 +184,45 @@ const HCPlandscape = () => {
       }
     })
 
+    // Create a map to track unique HCP IDs for each segment and specialty
+    const segmentSpecialtyHcpMap = new Map()
+
     data.forEach((item) => {
-      const specialty = item.final_spec.toUpperCase()
-      if (specialtyCounts[item.hcp_segment][specialty] !== undefined) {
-        specialtyCounts[item.hcp_segment][specialty]++
-      } else {
-        specialtyCounts[item.hcp_segment]["ALL OTHERS"]++
+      if (item.hcp_segment && item.hcp_id && item.final_spec) {
+        const specialty = item.final_spec.toUpperCase()
+        const key = `${item.hcp_segment}_${specialty}`
+
+        if (!segmentSpecialtyHcpMap.has(key)) {
+          segmentSpecialtyHcpMap.set(key, new Set())
+        }
+
+        segmentSpecialtyHcpMap.get(key).add(item.hcp_id)
       }
+    })
+
+    // Update counts based on unique HCP IDs
+    segments.forEach((segment) => {
+      Object.keys(specialtyCounts[segment]).forEach((specialty) => {
+        if (specialty !== "segment") {
+          const key = `${segment}_${specialty}`
+          specialtyCounts[segment][specialty] = segmentSpecialtyHcpMap.has(key)
+            ? segmentSpecialtyHcpMap.get(key).size
+            : 0
+        }
+      })
+
+      // Handle "ALL OTHERS" specialty
+      data.forEach((item) => {
+        if (item.hcp_segment === segment) {
+          const specialty = item.final_spec.toUpperCase()
+          if (!specialtyCounts[segment][specialty] && specialty !== "ALL OTHERS") {
+            const key = `${segment}_${specialty}`
+            if (segmentSpecialtyHcpMap.has(key)) {
+              specialtyCounts[segment]["ALL OTHERS"] += segmentSpecialtyHcpMap.get(key).size
+            }
+          }
+        }
+      })
     })
 
     // Convert to the format expected by the chart
@@ -192,86 +240,103 @@ const HCPlandscape = () => {
   }
 
   // Function to process potential data
-  // Function to process potential data
-const processPotentialData = (data) => {
-  // Create a Map to track unique patient IDs for each segment
-  const segmentPatientMap = new Map();
-  
-  // Process each record
-  data.forEach((item) => {
-    if (item.hcp_segment && item.patient_id) {
-      // Normalize segment name (uppercase for consistency)
-      const segment = item.hcp_segment.toUpperCase();
-      
-      // Initialize set for this segment if it doesn't exist
-      if (!segmentPatientMap.has(segment)) {
-        segmentPatientMap.set(segment, new Set());
-      }
-      
-      // Add patient ID to the set for this segment
-      segmentPatientMap.get(segment).add(item.patient_id);
-    }
-  });
-  
-  // Map segments to colors and labels
-  const colorMap = {
-    HIGH: "#B073FE",
-    MEDIUM: "#FDBA74",
-    LOW: "#B4F06C",
-    "V-LOW": "#6EE79A",
-    "VERY LOW": "#6EE79A",
-  };
+  const processPotentialData = (data) => {
+    // Create a Map to track unique HCP IDs for each segment
+    const segmentHcpMap = new Map()
 
-  const labelMap = {
-    HIGH: "High Potential",
-    MEDIUM: "Moderate",
-    LOW: "Low Potential",
-    "V-LOW": "Very Low Potential",
-    "VERY LOW": "Very Low Potential",
-  };
-  
-  // Convert map to array and format for the chart
-  const result = Array.from(segmentPatientMap).map(([segment, patientSet]) => ({
-    label: labelMap[segment] || segment,
-    value: patientSet.size,
-    color: colorMap[segment] || "#000000",
-  }));
-  
-  // Sort by predefined order: High, Moderate, Low, V. Low
-  const orderMap = { 'HIGH': 0, 'MEDIUM': 1, 'MODERATE': 1, 'LOW': 2, 'V-LOW': 3, 'VERY LOW': 3 };
-  
-  result.sort((a, b) => {
-    const aSegment = Object.keys(labelMap).find(key => labelMap[key] === a.label) || '';
-    const bSegment = Object.keys(labelMap).find(key => labelMap[key] === b.label) || '';
-    const aOrder = orderMap[aSegment] ?? 999;
-    const bOrder = orderMap[bSegment] ?? 999;
-    return aOrder - bOrder;
-  });
-  
-  return result;
-};
+    // Process each record
+    data.forEach((item) => {
+      if (item.hcp_segment && item.hcp_id) {
+        // Normalize segment name (uppercase for consistency)
+        const segment = item.hcp_segment.toUpperCase()
+
+        // Initialize set for this segment if it doesn't exist
+        if (!segmentHcpMap.has(segment)) {
+          segmentHcpMap.set(segment, new Set())
+        }
+
+        // Add HCP ID to the set for this segment
+        segmentHcpMap.get(segment).add(item.hcp_id)
+      }
+    })
+
+    // Map segments to colors and labels
+    const colorMap = {
+      HIGH: "#B073FE",
+      MEDIUM: "#FDBA74",
+      LOW: "#B4F06C",
+      "V-LOW": "#6EE79A",
+      "VERY LOW": "#6EE79A",
+    }
+
+    const labelMap = {
+      HIGH: "High Potential",
+      MEDIUM: "Moderate",
+      LOW: "Low Potential",
+      "V-LOW": "Very Low Potential",
+      "VERY LOW": "Very Low Potential",
+    }
+
+    // Convert map to array and format for the chart
+    const result = Array.from(segmentHcpMap).map(([segment, hcpSet]) => ({
+      label: labelMap[segment] || segment,
+      value: hcpSet.size,
+      color: colorMap[segment] || "#000000",
+    }))
+
+    // Sort by predefined order: High, Moderate, Low, V. Low
+    const orderMap = { HIGH: 0, MEDIUM: 1, MODERATE: 1, LOW: 2, "V-LOW": 3, "VERY LOW": 3 }
+
+    result.sort((a, b) => {
+      const aSegment = Object.keys(labelMap).find((key) => labelMap[key] === a.label) || ""
+      const bSegment = Object.keys(labelMap).find((key) => labelMap[key] === b.label) || ""
+      const aOrder = orderMap[aSegment] ?? 999
+      const bOrder = orderMap[bSegment] ?? 999
+      return aOrder - bOrder
+    })
+
+    return result
+  }
 
   // Function to process table data
   const processTableData = (data) => {
-    // Get unique HCPs
+    // Get unique HCPs and count their patients
     const uniqueHcps = {}
+    const hcpPatientCounts = {}
 
     data.forEach((item) => {
-      if (!uniqueHcps[item.hcp_id]) {
-        uniqueHcps[item.hcp_id] = {
-          "HCP ID": item.hcp_id,
-          "HCP Name": item.hcp_name,
-          Specialty: item.final_spec,
-          "Affiliated Accounts": item.hco_mdm_name,
+      if (item.hcp_id) {
+        // Initialize HCP entry if it doesn't exist
+        if (!uniqueHcps[item.hcp_id]) {
+          uniqueHcps[item.hcp_id] = {
+            "HCP ID": item.hcp_id,
+            "HCP Name": item.hcp_name,
+            Specialty: item.final_spec,
+            "Affiliated Accounts": item.hco_mdm_name,
+            "HCP Segment": item.hcp_segment,
+          }
+          hcpPatientCounts[item.hcp_id] = new Set()
+        }
+
+        // Add patient to count if it exists
+        if (item.patient_id) {
+          hcpPatientCounts[item.hcp_id].add(item.patient_id)
         }
       }
     })
 
+    // Add patient count to each HCP
+    Object.keys(uniqueHcps).forEach((hcpId) => {
+      uniqueHcps[hcpId]["Patient Count"] = hcpPatientCounts[hcpId].size
+    })
+
     // Convert to array and add rank
-    return Object.values(uniqueHcps).map((hcp, index) => ({
-      Rank: String(index + 1).padStart(2, "0"),
-      ...hcp,
-    }))
+    return Object.values(uniqueHcps)
+      .sort((a, b) => b["Patient Count"] - a["Patient Count"])
+      .map((hcp, index) => ({
+        Rank: String(index + 1).padStart(2, "0"),
+        ...hcp,
+      }))
   }
 
   // Handle row count change
@@ -292,6 +357,11 @@ const processPotentialData = (data) => {
 
   return (
     <div className="flex flex-col gap-4 w-full p-2">
+      <div className="flex items-center py-1 px-2 rounded-lg bg-white w-16 justify-between">
+         
+          <span className="text-[12px] text-gray-600">Year</span>
+          <ChevronDown className="w-4 h-4"/>
+      </div>
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
@@ -313,9 +383,9 @@ const processPotentialData = (data) => {
 
             <div className="flex items-center gap-1">
               <span className="text-gray-700 text-[16px] font-[500]">{kpiData ? kpiData.pt_12_mth : "0"}</span>
-              <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
+              {/* <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
               <span className="text-green-500 text-xs">5.2%</span>
-              <span className="text-gray-500 text-xs">vs last month</span>
+              <span className="text-gray-500 text-xs">vs last month</span> */}
             </div>
           </div>
         </div>
@@ -349,7 +419,7 @@ const processPotentialData = (data) => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Referred per HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData ? kpiData.avg_patients_per_hco : "0"}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">2.1</span>
         </div>
       </div>
       <div className="flex gap-4 w-full">
@@ -535,22 +605,26 @@ const processPotentialData = (data) => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-blue-200 text-gray-700 text-[11px] font-medium">
-                <th className="p-2 text-left w-1/5">Rank</th>
-                <th className="p-2 text-left w-1/5">HCP ID</th>
-                <th className="p-2 text-left w-1/5">HCP Name</th>
-                <th className="p-2 text-left w-1/5">Specialty</th>
-                <th className="p-2 text-left w-1/5">Affiliated Accounts</th>
+                <th className="p-2 text-left">Rank</th>
+                <th className="p-2 text-left">HCP ID</th>
+                <th className="p-2 text-left">HCP Name</th>
+                <th className="p-2 text-left">Specialty</th>
+                <th className="p-2 text-left">HCP Segment</th>
+                <th className="p-2 text-right">Patient Count</th>
+                <th className="p-2 text-left">Affiliated Accounts</th>
               </tr>
             </thead>
 
             <tbody>
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
-                  <td className="p-2 w-1/5">{hcp.Rank}</td>
-                  <td className="p-2 w-1/5">{hcp["HCP ID"]}</td>
-                  <td className="p-2 w-1/5">{hcp["HCP Name"]}</td>
-                  <td className="p-2 w-1/5">{hcp.Specialty}</td>
-                  <td className="p-2 w-1/5">{hcp["Affiliated Accounts"]}</td>
+                  <td className="p-2">{hcp.Rank}</td>
+                  <td className="p-2">{hcp["HCP ID"]}</td>
+                  <td className="p-2">{hcp["HCP Name"]}</td>
+                  <td className="p-2">{hcp.Specialty}</td>
+                  <td className="p-2">{hcp["HCP Segment"]}</td>
+                  <td className="p-2 text-right">{hcp["Patient Count"]}</td>
+                  <td className="p-2">{hcp["Affiliated Accounts"]}</td>
                 </tr>
               ))}
             </tbody>

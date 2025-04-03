@@ -1,60 +1,56 @@
 import React, { useMemo } from 'react';
 
 const HCOchart = ({ HCOdata }) => {
-    const formatTierName = (tier) => {
-        if (!tier || tier.trim() === '-') return 'Unknown';
+    const formatSegmentName = (segment) => {
+        segment = segment.replace(/-/g, '').toUpperCase(); // Remove '-'
 
-        tier = tier.trim();
+        if (segment === 'TIER 1') return 'Tier 1';
+        if (segment === 'TIER 2') return 'Tier 2';
+        if (segment === 'TIER 3') return 'Tier 3';
 
-        if (/^tier \d+$/i.test(tier)) {
-            return tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
-        }
-
-        const tierMatch = tier.match(/\d+/);
-        if (tierMatch) {
-            return `Tier ${tierMatch[0]}`;
-        }
-        
-        return tier;
+        return segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase();
     };
 
-    const tierData = useMemo(() => {
+    const segmentData = useMemo(() => {
         if (!HCOdata || !Array.isArray(HCOdata) || HCOdata.length === 0) {
             return [];
         }
 
-        const tierPatientMap = new Map();
+        const segmentHCOMap = new Map();
 
         HCOdata.forEach(record => {
-            if (record.hco_mdm_tier && record.patient_id) {
-                const tier = formatTierName(record.hco_mdm_tier);
+            if (record.hco_mdm_tier && record.hco_mdm) {
+                const tier = record.hco_mdm_tier.replace(/-/g, '').trim().toUpperCase(); // Remove '-' and trim spaces
 
-                if (!tierPatientMap.has(tier)) {
-                    tierPatientMap.set(tier, new Set());
+                if (!tier) return; // Skip empty/invalid tiers
+
+                if (!segmentHCOMap.has(tier)) {
+                    segmentHCOMap.set(tier, new Set());
                 }
-                tierPatientMap.get(tier).add(record.patient_id);
+                segmentHCOMap.get(tier).add(record.hco_mdm);
             }
         });
-        
-        const result = Array.from(tierPatientMap).map(([name, patientSet]) => ({
-            name,
-            value: patientSet.size
+
+        const result = Array.from(segmentHCOMap).map(([name, hcoSet]) => ({
+            name: formatSegmentName(name),
+            value: hcoSet.size
         }));
 
+        const orderMap = { 'TIER 1': 0, 'TIER 2': 1, 'TIER 3': 2 };
+
         result.sort((a, b) => {
-            const aNum = parseInt(a.name.match(/\d+/)?.[0] || '9999');
-            const bNum = parseInt(b.name.match(/\d+/)?.[0] || '9999');
-            return aNum - bNum;
+            const aOrder = orderMap[a.name.toUpperCase()] ?? 999;
+            const bOrder = orderMap[b.name.toUpperCase()] ?? 999;
+            return aOrder - bOrder;
         });
-        
+
         return result;
     }, [HCOdata]);
 
-    const maxValue = Math.max(...tierData.map(item => item.value), 1);
+    const maxValue = Math.max(...segmentData.map(item => item.value), 1);
 
     return (
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-48 p-2 justify-between">
-            {/* Header */}
             <div className="flex gap-2 items-center mb-2">
                 <div className="bg-blue-100 rounded-full h-6 w-6 p-1 flex justify-center items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" className="text-blue-800 h-4 w-4">
@@ -62,27 +58,26 @@ const HCOchart = ({ HCOdata }) => {
                     </svg>
                 </div>
                 <span className="text-gray-500 text-xs font-medium">
-                    HCO Tier by Treated Patient Volume
+                    HCO Cluster by Treated Patient Volume
                 </span>
             </div>
 
-            {/* Chart Container */}
             <div className="flex-grow">
                 <div className="h-full w-full flex items-center justify-center">
-                    {tierData.length > 0 ? (
+                    {segmentData.length > 0 ? (
                         <div className="w-full">
-                            {tierData.map((item, index) => (
+                            {segmentData.map((item, index) => (
                                 <div key={index} className="flex items-center mb-2">
                                     <div className="w-16 text-xs text-gray-600">{item.name}</div>
                                     <div className="flex-grow">
                                         <div 
-                                            className="bg-[#004567] h-5 rounded-md" 
+                                            className="bg-[#004567]/80 h-5 rounded-md " 
                                             style={{ 
-                                                width: `${Math.max((item.value / maxValue) * 100, 5)}%`,
+                                                width: `${Math.max((item.value / maxValue) * 100, 5) + 1}%`,
                                                 transition: 'width 0.5s ease-in-out' 
                                             }}
                                         >
-                                            <div className="pl-2 h-full flex items-center">
+                                            <div className="pl-1 h-full flex items-center">
                                                 <span className="text-xs text-white font-medium">
                                                     {item.value}
                                                 </span>

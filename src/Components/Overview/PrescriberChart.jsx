@@ -24,27 +24,21 @@ const PrescriberClusterChart = ({ hcpData }) => {
         
         // Process each record
         hcpData.forEach(record => {
-            if (record.hcp_segment && record.patient_id) {
-                // Normalize segment name (uppercase for consistency)
+            if (record.hcp_segment && record.hcp_id) {
+        
                 const segment = record.hcp_segment.toUpperCase();
-                
-                // Initialize set for this segment if it doesn't exist
                 if (!segmentPatientMap.has(segment)) {
                     segmentPatientMap.set(segment, new Set());
                 }
                 
-                // Add patient ID to the set for this segment
-                segmentPatientMap.get(segment).add(record.patient_id);
+                segmentPatientMap.get(segment).add(record.hcp_id);
             }
         });
-        
-        // Convert map to array of objects with segment name and count
         const result = Array.from(segmentPatientMap).map(([name, patientSet]) => ({
             name: formatSegmentName(name),
             value: patientSet.size
         }));
-        
-        // Sort by predefined order: High, Moderate, Low, V. Low
+      
         const orderMap = { 'HIGH': 0, 'MODERATE': 1, 'LOW': 2, 'V. LOW': 3, 'VERY LOW': 3 };
         
         result.sort((a, b) => {
@@ -58,7 +52,7 @@ const PrescriberClusterChart = ({ hcpData }) => {
     
     // Find maximum value to scale bars properly
     const maxValue = Math.max(...segmentData.map(item => item.value), 1);
-
+    console.log(segmentData)
     return (
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-48 p-2 justify-between">
             {/* Header */}
@@ -83,13 +77,13 @@ const PrescriberClusterChart = ({ hcpData }) => {
                                     <div className="w-16 text-xs text-gray-600">{item.name}</div>
                                     <div className="flex-grow">
                                         <div 
-                                            className="bg-[#004567] h-5 rounded-md" 
+                                            className="bg-[#004567]/80 h-5 rounded-md " 
                                             style={{ 
-                                                width: `${Math.max((item.value / maxValue) * 100, 5)}%`,
+                                                width: `${Math.max((item.value / maxValue) * 100, 5)+1}%`,
                                                 transition: 'width 0.5s ease-in-out' 
                                             }}
                                         >
-                                            <div className="pl-2 h-full flex items-center">
+                                            <div className="pl-1 h-full flex items-center">
                                                 <span className="text-xs text-white font-medium">
                                                     {item.value}
                                                 </span>
