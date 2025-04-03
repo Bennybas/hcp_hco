@@ -1,13 +1,57 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
-const data = [
-    { name: 'Tier 1', value: 1000 },
-    { name: 'Tier 2', value: 1500 },
-    { name: 'Tier 3', value: 2500 },
-    { name: 'Tier 4', value: 3500 }
-];
+const HCOchart = ({ HCOdata }) => {
+    const formatTierName = (tier) => {
+        if (!tier || tier.trim() === '-') return 'Unknown';
 
-const HCOchart = () => {
+        tier = tier.trim();
+
+        if (/^tier \d+$/i.test(tier)) {
+            return tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
+        }
+
+        const tierMatch = tier.match(/\d+/);
+        if (tierMatch) {
+            return `Tier ${tierMatch[0]}`;
+        }
+        
+        return tier;
+    };
+
+    const tierData = useMemo(() => {
+        if (!HCOdata || !Array.isArray(HCOdata) || HCOdata.length === 0) {
+            return [];
+        }
+
+        const tierPatientMap = new Map();
+
+        HCOdata.forEach(record => {
+            if (record.hco_mdm_tier && record.patient_id) {
+                const tier = formatTierName(record.hco_mdm_tier);
+
+                if (!tierPatientMap.has(tier)) {
+                    tierPatientMap.set(tier, new Set());
+                }
+                tierPatientMap.get(tier).add(record.patient_id);
+            }
+        });
+        
+        const result = Array.from(tierPatientMap).map(([name, patientSet]) => ({
+            name,
+            value: patientSet.size
+        }));
+
+        result.sort((a, b) => {
+            const aNum = parseInt(a.name.match(/\d+/)?.[0] || '9999');
+            const bNum = parseInt(b.name.match(/\d+/)?.[0] || '9999');
+            return aNum - bNum;
+        });
+        
+        return result;
+    }, [HCOdata]);
+
+    const maxValue = Math.max(...tierData.map(item => item.value), 1);
+
     return (
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-48 p-2 justify-between">
             {/* Header */}
@@ -18,36 +62,39 @@ const HCOchart = () => {
                     </svg>
                 </div>
                 <span className="text-gray-500 text-xs font-medium">
-                    Prescriber Cluster by Treated Patient Volume
+                    HCO Tier by Treated Patient Volume
                 </span>
             </div>
 
             {/* Chart Container */}
             <div className="flex-grow">
                 <div className="h-full w-full flex items-center justify-center">
-                    {/* Custom Horizontal Bars Implementation */}
-                    <div className="w-full">
-                        {data.map((item, index) => (
-                            <div key={index} className="flex items-center mb-2">
-                                <div className="w-16 text-xs text-gray-600">{item.name}</div>
-                                <div className="flex-grow">
-                                    <div 
-                                        className="bg-[#004567]/70 h-5 rounded-md" 
-                                        style={{ 
-                                            width: `${(item.value / 3500) * 100}%`,
-                                            transition: 'width 0.5s ease-in-out' 
-                                        }}
-                                    >
-                                        <div className="pl-2 h-full flex items-center">
-                                            <span className="text-xs text-white font-medium">
-                                                {item.value}
-                                            </span>
+                    {tierData.length > 0 ? (
+                        <div className="w-full">
+                            {tierData.map((item, index) => (
+                                <div key={index} className="flex items-center mb-2">
+                                    <div className="w-16 text-xs text-gray-600">{item.name}</div>
+                                    <div className="flex-grow">
+                                        <div 
+                                            className="bg-[#004567] h-5 rounded-md" 
+                                            style={{ 
+                                                width: `${Math.max((item.value / maxValue) * 100, 5)}%`,
+                                                transition: 'width 0.5s ease-in-out' 
+                                            }}
+                                        >
+                                            <div className="pl-2 h-full flex items-center">
+                                                <span className="text-xs text-white font-medium">
+                                                    {item.value}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500">No data available</div>
+                    )}
                 </div>
             </div>
         </div>

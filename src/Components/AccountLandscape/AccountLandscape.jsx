@@ -229,7 +229,7 @@ const patientTrendData = [
                         <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                         <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        
                         
                         {/* Lines for each Archetype */}
                         <Line type="monotone" dataKey="Archetype 1" stroke="#0b5cab" strokeWidth={2} />
