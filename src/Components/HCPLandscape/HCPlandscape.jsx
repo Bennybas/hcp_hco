@@ -42,12 +42,12 @@ const HCPlandscape = () => {
     const fetchAllData = async () => {
       try {
         // Fetch KPI Card data
-        const kpiResponse = await fetch("http://127.0.0.1:5000/fetch-hcplandscape-kpicard")
+        const kpiResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-kpicard")
         const kpiData = await kpiResponse.json()
         setKpiData(kpiData[0])
 
         // Fetch Quarter Patient data
-        const quarterPatResponse = await fetch("http://127.0.0.1:5000/fetch-hcplandscape-quarterpat")
+        const quarterPatResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-quarterpat")
         const quarterPatData = await quarterPatResponse.json()
         const formattedQuarterData = quarterPatData.map((item) => ({
           quarter: `Q${item.quarter} 24`,
@@ -56,7 +56,7 @@ const HCPlandscape = () => {
         setQuarterPatData(formattedQuarterData)
 
         // Fetch Brand data
-        const brandResponse = await fetch("http://127.0.0.1:5000/fetch-hcplandscape-brand")
+        const brandResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-brand")
         const brandData = await brandResponse.json()
         const formattedBrandData = brandData.map((item) => ({
           quarter: `2024 Q${item.quarter}`,
@@ -67,7 +67,7 @@ const HCPlandscape = () => {
         setBrandData(formattedBrandData)
 
         // Fetch Insights data
-        const insightsResponse = await fetch("http://127.0.0.1:5000/fetch-hcplandscape-insights")
+        const insightsResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-insights")
         const insightsData = await insightsResponse.json()
         setInsightsData(insightsData)
 
