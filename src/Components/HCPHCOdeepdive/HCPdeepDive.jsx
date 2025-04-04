@@ -1,5 +1,3 @@
-"use client"
-
 import { ArrowLeft } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
@@ -158,14 +156,23 @@ const HCPdeepDive = () => {
       const innerWidth = width - margin.left - margin.right
       const innerHeight = height - margin.top - margin.bottom
 
-      // Create SVG
+      // Create SVG with zoom functionality
       const svg = d3
         .select(networkRef.current)
         .append("svg")
         .attr("width", width)
         .attr("height", height)
+        .call(
+          d3.zoom().on("zoom", (event) => {
+            // Apply zoom transformation to the main container group
+            mainGroup.attr("transform", event.transform)
+          }),
+        )
         .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`)
+
+      // Create a main group that will be transformed during zoom
+      const mainGroup = svg.append("g")
 
       // Create nodes and links for the graph
       const nodes = []
@@ -250,20 +257,26 @@ const HCPdeepDive = () => {
         })
       })
 
-      // Calculate y-positions for nodes at each level
+      // Calculate y-positions for nodes at each level with increased spacing
       const nodesByLevel = [
         [rootNode], // Level 0 - Current HCP
         nodes.filter((n) => n.level === 1), // Level 1 - Referred HCPs
         nodes.filter((n) => n.level === 2), // Level 2 - Affiliated Accounts
       ]
 
-      // Position nodes at each level
+      // Position nodes at each level with increased vertical spacing
       nodesByLevel.forEach((levelNodes, level) => {
-        const levelHeight = innerHeight
-        const nodeSpacing = levelHeight / (levelNodes.length + 1)
+        // Increase padding for referred HCPs (level 1)
+        const nodePadding = level === 1 ? 60 : 30
+
+        // Calculate total height needed for this level
+        const totalNodesHeight = levelNodes.length * nodePadding
+
+        // Start position - center the group of nodes
+        const startY = Math.max(0, (innerHeight - totalNodesHeight) / 2)
 
         levelNodes.forEach((node, i) => {
-          node.y = (i + 1) * nodeSpacing
+          node.y = startY + i * nodePadding
         })
       })
 
@@ -274,7 +287,7 @@ const HCPdeepDive = () => {
       })
 
       // Draw links with curved paths
-      svg
+      mainGroup
         .selectAll(".link")
         .data(links)
         .enter()
@@ -296,7 +309,7 @@ const HCPdeepDive = () => {
         .attr("opacity", 0.7)
 
       // Draw nodes
-      const nodeGroups = svg
+      const nodeGroups = mainGroup
         .selectAll(".node")
         .data(nodes)
         .enter()
@@ -354,6 +367,16 @@ const HCPdeepDive = () => {
         .attr("font-size", "9px")
         .attr("fill", "#555")
         .text((d) => `Patients: ${d.patients}`)
+
+      // Add zoom instructions
+      svg
+        .append("text")
+        .attr("x", width - margin.right - 150)
+        .attr("y", height - margin.bottom - 10)
+        .attr("text-anchor", "end")
+        .attr("font-size", "10px")
+        .attr("fill", "#666")
+        .text("Use mouse wheel to zoom, drag to pan")
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -711,9 +734,10 @@ const HCPdeepDive = () => {
                 </div>
               </div>
 
-              {/* Remove the instructions about dragging nodes */}
+              {/* Instructions */}
               <div className="text-gray-500 text-[10px] mt-2 px-2">
                 <p>* Node size indicates number of patients referred</p>
+                <p>* Use mouse wheel to zoom, drag to pan</p>
               </div>
             </div>
           </div>
