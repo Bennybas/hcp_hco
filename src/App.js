@@ -1,5 +1,5 @@
 import HCOdeepDive from "./Components/HCPHCOdeepdive/HCOdeepDive";
-import HCPdeepDive from "./Components/HCPHCOdeepdive/HCPHCOdeepDive";
+import HCPdeepDive from "./Components/HCPHCOdeepdive/HCPdeepDive";
 import Header from "./Header/Header";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 

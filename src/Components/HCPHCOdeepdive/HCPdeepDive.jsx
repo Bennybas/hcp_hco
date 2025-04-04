@@ -1,10 +1,11 @@
 "use client"
 
 import { ArrowLeft } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
 import { useLocation } from "react-router-dom"
+import * as d3 from "d3"
 
 const HCPdeepDive = () => {
   const navigate = useNavigate()
@@ -21,6 +22,11 @@ const HCPdeepDive = () => {
   const [allReferralData, setAllReferralData] = useState([])
   const [activeTab, setActiveTab] = useState("all")
   const [hcpNPI, setHcpNPI] = useState("")
+
+  // Ref for the network graph container
+  const networkRef = useRef(null)
+  // Ref to track if the graph has been rendered
+  const graphRenderedRef = useRef(false)
 
   useEffect(() => {
     const fetchHCPData = async () => {
@@ -120,8 +126,237 @@ const HCPdeepDive = () => {
 
   // Handle tab change
   const handleTabChange = (tab) => {
+    if (tab === activeTab) return // Don't rerender if the tab hasn't changed
     setActiveTab(tab)
     filterReferralData(tab)
+    // Reset the graph rendered flag when changing tabs
+    graphRenderedRef.current = false
+  }
+
+  // Effect to render the network graph when referral data changes
+  useEffect(() => {
+    if (networkRef.current && !graphRenderedRef.current) {
+      renderNetworkGraph()
+      graphRenderedRef.current = true
+    }
+  }, [referralData])
+
+  const renderNetworkGraph = () => {
+    try {
+      // Safely clear previous graph
+      if (networkRef.current) {
+        const container = d3.select(networkRef.current)
+        container.selectAll("svg").remove()
+      }
+
+      if (referralData.length === 0) return
+
+      // Set up dimensions
+      const width = networkRef.current.clientWidth
+      const height = 550
+      const margin = { top: 20, right: 300, bottom: 20, left: 150 }
+      const innerWidth = width - margin.left - margin.right
+      const innerHeight = height - margin.top - margin.bottom
+
+      // Create SVG
+      const svg = d3
+        .select(networkRef.current)
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`)
+
+      // Create nodes and links for the graph
+      const nodes = []
+      const links = []
+
+      // Add current HCP as the root node
+      const rootNode = {
+        id: "root",
+        name: hcpDetails.name || hcpName,
+        specialty: hcpDetails.specialty || "Unknown",
+        type: "current",
+        patients: 0,
+        x: 0,
+        y: innerHeight / 2,
+        level: 0,
+      }
+      nodes.push(rootNode)
+
+      // Group referred HCPs by affiliated account
+      const accountGroups = {}
+      referralData.forEach((hcp) => {
+        if (!accountGroups[hcp.affiliatedAccount]) {
+          accountGroups[hcp.affiliatedAccount] = []
+        }
+        accountGroups[hcp.affiliatedAccount].push(hcp)
+      })
+
+      // Calculate positions for referred HCPs
+      const hcpLevel = innerWidth / 3 // Position at 1/3 of the width
+      const accountLevel = (innerWidth * 2) / 3 // Position at 2/3 of the width
+
+      // Add referred HCPs and their affiliated accounts
+      const accountNodes = {}
+      let hcpIndex = 0
+
+      Object.entries(accountGroups).forEach(([accountName, hcps], accountIndex) => {
+        // Create account node if not exists
+        if (!accountNodes[accountName]) {
+          const accountNode = {
+            id: `account-${accountName.replace(/\s+/g, "-")}`,
+            name: accountName,
+            type: "account",
+            patients: 0,
+            x: accountLevel,
+            y: 0, // Will be calculated later
+            level: 2,
+          }
+          accountNodes[accountName] = accountNode
+          nodes.push(accountNode)
+        }
+
+        // Add HCP nodes for this account
+        hcps.forEach((hcp, i) => {
+          const hcpNode = {
+            id: `hcp-${hcpIndex}`,
+            name: hcp.hcpName,
+            specialty: hcp.specialty,
+            patients: hcp.patientsReferred,
+            type: "referred",
+            x: hcpLevel,
+            y: 0, // Will be calculated later
+            level: 1,
+            accountId: accountNodes[accountName].id,
+          }
+          nodes.push(hcpNode)
+
+          // Link from root to HCP
+          links.push({
+            source: rootNode.id,
+            target: hcpNode.id,
+            value: hcp.patientsReferred,
+          })
+
+          // Link from HCP to affiliated account
+          links.push({
+            source: hcpNode.id,
+            target: accountNodes[accountName].id,
+            value: hcp.patientsReferred,
+          })
+
+          hcpIndex++
+        })
+      })
+
+      // Calculate y-positions for nodes at each level
+      const nodesByLevel = [
+        [rootNode], // Level 0 - Current HCP
+        nodes.filter((n) => n.level === 1), // Level 1 - Referred HCPs
+        nodes.filter((n) => n.level === 2), // Level 2 - Affiliated Accounts
+      ]
+
+      // Position nodes at each level
+      nodesByLevel.forEach((levelNodes, level) => {
+        const levelHeight = innerHeight
+        const nodeSpacing = levelHeight / (levelNodes.length + 1)
+
+        levelNodes.forEach((node, i) => {
+          node.y = (i + 1) * nodeSpacing
+        })
+      })
+
+      // Create node-to-node mapping for links
+      const nodeMap = {}
+      nodes.forEach((node) => {
+        nodeMap[node.id] = node
+      })
+
+      // Draw links with curved paths
+      svg
+        .selectAll(".link")
+        .data(links)
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("d", (d) => {
+          const source = nodeMap[d.source]
+          const target = nodeMap[d.target]
+          const midX = (source.x + target.x) / 2
+
+          return `M${source.x},${source.y} 
+                  C${midX},${source.y} 
+                   ${midX},${target.y} 
+                   ${target.x},${target.y}`
+        })
+        .attr("fill", "none")
+        .attr("stroke", "#ccc")
+        .attr("stroke-width", (d) => Math.sqrt(d.value) + 1)
+        .attr("opacity", 0.7)
+
+      // Draw nodes
+      const nodeGroups = svg
+        .selectAll(".node")
+        .data(nodes)
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", (d) => `translate(${d.x},${d.y})`)
+
+      // Add circles for nodes with different sizes based on type and patient count
+      nodeGroups
+        .append("circle")
+        .attr("r", (d) => {
+          if (d.type === "current") return 25
+          if (d.type === "referred") return 15 + Math.sqrt(d.patients) * 1.5
+          return 12
+        })
+        .attr("fill", (d) => {
+          if (d.type === "current") return "#0b5cab"
+          if (d.type === "referred") return "#69a7ad"
+          return "#9370db"
+        })
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.5)
+
+      // Add text labels
+      nodeGroups
+        .append("text")
+        .attr("x", (d) => (d.level === 0 ? -35 : d.level === 2 ? 20 : 0))
+        .attr("y", (d) => (d.level === 1 ? -20 : 0))
+        .attr("text-anchor", (d) => (d.level === 0 ? "end" : d.level === 2 ? "start" : "middle"))
+        .attr("font-size", "11px")
+        .attr("font-weight", "500")
+        .attr("fill", "#333")
+        .attr("dy", ".35em")
+        .text((d) => d.name)
+
+      // Add specialty labels for HCP nodes
+      nodeGroups
+        .filter((d) => d.type === "referred")
+        .append("text")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "9px")
+        .attr("fill", "#555")
+        .attr("dy", ".35em")
+        .text((d) => d.specialty)
+
+      // Add patient count for referred HCPs
+      nodeGroups
+        .filter((d) => d.type === "referred")
+        .append("text")
+        .attr("x", 0)
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "9px")
+        .attr("fill", "#555")
+        .text((d) => `Patients: ${d.patients}`)
+    } catch (error) {
+      console.error("Error rendering network graph:", error)
+    }
   }
 
   const processHCPData = (data) => {
@@ -209,47 +444,51 @@ const HCPdeepDive = () => {
       const scientificValues = {
         Publications: null,
         "Clinical Trials": null,
-        Congress: null
-      };
-  
+        Congress: null,
+      }
+
       // Find first valid publications value
       for (const record of data) {
         if (record.publications && record.publications !== "null" && record.publications.trim() !== "") {
-          scientificValues.Publications = parseInt(record.publications, 10);
-          break;
+          scientificValues.Publications = Number.parseInt(record.publications, 10)
+          break
         }
       }
-  
+
       // Find first valid clinical trials value
       for (const record of data) {
         if (record.clinical_trials && record.clinical_trials !== "null" && record.clinical_trials.trim() !== "") {
-          scientificValues["Clinical Trials"] = parseInt(record.clinical_trials, 10);
-          break;
+          scientificValues["Clinical Trials"] = Number.parseInt(record.clinical_trials, 10)
+          break
         }
       }
-  
+
       // Find first valid congress contributions value
       for (const record of data) {
-        if (record.congress_contributions && record.congress_contributions !== "null" && record.congress_contributions.trim() !== "") {
-          scientificValues.Congress = parseInt(record.congress_contributions, 10);
-          break;
+        if (
+          record.congress_contributions &&
+          record.congress_contributions !== "null" &&
+          record.congress_contributions.trim() !== ""
+        ) {
+          scientificValues.Congress = Number.parseInt(record.congress_contributions, 10)
+          break
         }
       }
-  
+
       // Set default value of 0 for any null values
-      Object.keys(scientificValues).forEach(key => {
+      Object.keys(scientificValues).forEach((key) => {
         if (scientificValues[key] === null) {
-          scientificValues[key] = 0;
+          scientificValues[key] = 0
         }
-      });
-  
+      })
+
       // Format data for the chart
       setScientificData(
-        Object.keys(scientificValues).map(category => ({
+        Object.keys(scientificValues).map((category) => ({
           category,
-          value: scientificValues[category]
-        }))
-      );
+          value: scientificValues[category],
+        })),
+      )
     }
   }
 
@@ -257,7 +496,6 @@ const HCPdeepDive = () => {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        
       </div>
     )
   }
@@ -334,30 +572,28 @@ const HCPdeepDive = () => {
         <div className="w-[80%] h-screen bg-white rounded-2xl overflow-y-auto">
           <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-col w-full h-56 p-2">
-                <div className="flex w-full items-center justify-between">
-                    <span className="text-gray-700 text-[11px] font-[500] pb-4">#Treated Patients</span>
-                    <div className="flex items-center justify-end gap-2">
-                        <div className="flex  items-center gap-1">
-                            <div className="bg-[#0b5cab] rounded-full w-2 h-2"></div>
-                            <span className="text-gray-700 text-[9px]">Treated Patients</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="bg-[#9370db] rounded-full w-2 h-2"></div>
-                            <span className="text-gray-700 text-[9px]">Zolgensma</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="bg-[#69a7ad] rounded-full w-2 h-2"></div>
-                            <span className="text-gray-700 text-[9px]">Spinraza</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="bg-[#0e7d0c] rounded-full w-2 h-2"></div>
-                            <span className="text-gray-700 text-[9px]">Evrysdi</span>
-                        </div>
-                    </div>
-                    
-
+              <div className="flex w-full items-center justify-between">
+                <span className="text-gray-700 text-[11px] font-[500] pb-4">#Treated Patients</span>
+                <div className="flex items-center justify-end gap-2">
+                  <div className="flex  items-center gap-1">
+                    <div className="bg-[#0b5cab] rounded-full w-2 h-2"></div>
+                    <span className="text-gray-700 text-[9px]">Treated Patients</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="bg-[#9370db] rounded-full w-2 h-2"></div>
+                    <span className="text-gray-700 text-[9px]">Zolgensma</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="bg-[#69a7ad] rounded-full w-2 h-2"></div>
+                    <span className="text-gray-700 text-[9px]">Spinraza</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="bg-[#0e7d0c] rounded-full w-2 h-2"></div>
+                    <span className="text-gray-700 text-[9px]">Evrysdi</span>
+                  </div>
                 </div>
-              
+              </div>
+
               <ResponsiveContainer width="100%" height="90%" style={{ marginLeft: -10 }}>
                 <LineChart data={quarterlyPatientTrendData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -447,35 +683,37 @@ const HCPdeepDive = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg overflow-hidden shadow">
-                <table className="w-full">
-                  <thead className="bg-[#D2D2D2]">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold">HCP Name</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold">Specialty</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold">Patients Referred</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold">Affiliated Account</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {referralData.length > 0 ? (
-                      referralData.map((row, index) => (
-                        <tr key={index} className="border-t border-gray-200">
-                          <td className="px-4 py-3 text-[10px]">{row.hcpName}</td>
-                          <td className="px-4 py-3 text-[10px]">{row.specialty}</td>
-                          <td className="px-4 py-3 text-[10px]">{row.patientsReferred}</td>
-                          <td className="px-4 py-3 text-[10px]">{row.affiliatedAccount}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr className="border-t border-gray-200">
-                        <td colSpan="4" className="px-4 py-3 text-[10px] text-center">
-                          No referral data available
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              {/* Network Graph Container */}
+              <div
+                ref={networkRef}
+                className="w-full h-[550px] border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
+              >
+                {referralData.length === 0 && (
+                  <div className="flex justify-center items-center h-full text-gray-500 text-sm">
+                    No referral data available
+                  </div>
+                )}
+              </div>
+
+              {/* Legend for the network graph */}
+              <div className="flex items-center justify-start gap-6 mt-4 px-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-[#0b5cab] rounded-full w-4 h-4"></div>
+                  <span className="text-gray-700 text-[11px]">Current HCP</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="bg-[#69a7ad] rounded-full w-4 h-4"></div>
+                  <span className="text-gray-700 text-[11px]">Referred HCPs</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="bg-[#9370db] rounded-full w-4 h-4"></div>
+                  <span className="text-gray-700 text-[11px]">Affiliated Accounts</span>
+                </div>
+              </div>
+
+              {/* Remove the instructions about dragging nodes */}
+              <div className="text-gray-500 text-[10px] mt-2 px-2">
+                <p>* Node size indicates number of patients referred</p>
               </div>
             </div>
           </div>
@@ -486,4 +724,3 @@ const HCPdeepDive = () => {
 }
 
 export default HCPdeepDive
-
