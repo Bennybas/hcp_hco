@@ -4,8 +4,10 @@ import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ArrowBigDown, ChevronDown, MoveUpRight } from "lucide-react"
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
+import { useNavigate } from "react-router-dom"
 
 const HCPlandscape = () => {
+  const navigate = useNavigate()
   const [kpiData, setKpiData] = useState(null)
   const [quarterPatData, setQuarterPatData] = useState([])
   const [brandData, setBrandData] = useState([])
@@ -355,6 +357,10 @@ const HCPlandscape = () => {
     )
   }
 
+  const getHCPDetails = (hcpName) => {
+    navigate("/hcp", { state: { hcp_name: hcpName } })
+  }
+
   return (
     <div className="flex flex-col gap-4 w-full p-2">
       <div className="flex items-center py-1 px-2 rounded-lg bg-white w-16 justify-between">
@@ -619,8 +625,8 @@ const HCPlandscape = () => {
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
                   <td className="p-2">{hcp.Rank}</td>
-                  <td className="p-2">{hcp["HCP ID"]}</td>
-                  <td className="p-2">{hcp["HCP Name"]}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])}className="p-2 cursor-pointer">{hcp["HCP ID"]}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">{hcp["HCP Name"]}</td>
                   <td className="p-2">{hcp.Specialty}</td>
                   <td className="p-2">{hcp["HCP Segment"]}</td>
                   <td className="p-2 text-right">{hcp["Patient Count"]}</td>

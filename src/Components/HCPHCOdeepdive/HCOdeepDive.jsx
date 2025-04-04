@@ -189,11 +189,7 @@ const HCOdeepDive = () => {
       specialtyArray.sort((a, b) => b.value - a.value)
 
       const colors = [
-        "#0088FE",
-        "#00C49F",
-        "#FFBB28",
-        "#FF8042",
-        "#8884D8",
+       "#00599D", "#6A99B5", "#7DFFA8", "#F0C3F7", "#C8E3F5",
         "#82CA9D",
         "#A4DE6C",
         "#D0ED57",
@@ -320,7 +316,6 @@ const HCOdeepDive = () => {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-2">Loading data...</span>
       </div>
     )
   }
@@ -341,7 +336,7 @@ const HCOdeepDive = () => {
           <img src="hcp-hco.jpg" alt="hcp-hco" className="h-16 w-full rounded-t-2xl" />
 
           <div className="absolute -mt-8 ml-3">
-            <img src="image.jpg" alt="img" className="h-20 w-20 rounded-full" />
+            <img src="hco.png" alt="img" className="h-20 w-20 rounded-full" />
           </div>
 
           {/* HCO Details */}

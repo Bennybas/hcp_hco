@@ -218,7 +218,7 @@ const Overview = () => {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-2">Loading data...</span>
+        
       </div>
     )
   }
@@ -319,7 +319,7 @@ const Overview = () => {
       </div>
 
       <div className="flex flex-col w-[42%]">
-        {/* <USAMap onStateSelect={handleStateSelect} /> */}
+        <USAMap onStateSelect={handleStateSelect} />
         {/* {selectedState && (
           <div className="mt-2 p-2 bg-blue-50 rounded-md text-center">
             <span className="text-sm font-medium">
