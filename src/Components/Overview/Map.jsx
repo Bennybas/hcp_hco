@@ -328,7 +328,7 @@ const USAMap = ({ onStateSelect }) => {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 ">
       {/* Toggle buttons */}
       <div className="flex items-center gap-2">
         <div
@@ -346,7 +346,7 @@ const USAMap = ({ onStateSelect }) => {
       </div>
 
       {/* Map container */}
-      <div className="relative">
+      <div className="relative bg-white rounded-xl">
         <ComposableMap projection="geoAlbersUsa" width={980} height={550} style={{ width: "100%", height: "auto" }}>
           <ZoomableGroup>
             <Geographies geography={geoUrl}>
