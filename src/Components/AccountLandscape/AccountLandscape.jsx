@@ -20,15 +20,34 @@ import { ComposableMap, Geographies, Geography } from "react-simple-maps"
 import { useNavigate } from "react-router-dom"
 
 const AccountLandscape = () => {
-  // State for storing fetched data
-  const navigate = useNavigate();
-  const [kpiData, setKpiData] = useState(null)
-  const [quarterData, setQuarterData] = useState([])
-  const [hcoData, setHcoData] = useState([])
+  const navigate = useNavigate()
+  const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [openDropdown, setOpenDropdown] = useState(null)
+
+  // State for KPI metrics
+  const [kpiData, setKpiData] = useState({
+    renderingHCOs: 0,
+    patientsLast12M: 0,
+    avgPatientsPerHCO: 0,
+    patientsReferred: 0,
+    referringHCOs: 0,
+  })
+
+  // State for chart data
+  const [quarterData, setQuarterData] = useState([])
+  const [facilityTypeData, setFacilityTypeData] = useState([])
+  const [hcoTierData, setHcoTierData] = useState([])
+  const [accountTableData, setAccountTableData] = useState([])
+  const [allAccountTableData, setAllAccountTableData] = useState([])
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
 
   // State for filters
   const [filters, setFilters] = useState({
+    year: "2024", // Default year, will be updated with most recent year
     ageFilter: "All",
     brand: "All",
     state: "All",
@@ -37,207 +56,306 @@ const AccountLandscape = () => {
     zolgIVTarget: "All",
   })
 
-  // Extract unique filter options
-  const getFilterOptions = (field) => {
-    if (!hcoData || hcoData.length === 0) return []
+  // Filter options
+  const [filterOptions, setFilterOptions] = useState({
+    years: [],
+    ages: ["All"],
+    brands: ["All"],
+    states: ["All"],
+  })
 
-    const options = new Set()
-    hcoData.forEach((item) => {
-      if (item[field] && item[field] !== "-") {
-        options.add(item[field])
-      }
-    })
-
-    return Array.from(options)
-  }
-
-  // Extract state from address
-  const extractState = (address) => {
-    if (!address) return ""
-    const matches = address.match(/,\s*([A-Z]{2}),/)
-    return matches ? matches[1] : ""
-  }
-
-  // Get unique states
-  const getStateOptions = () => {
-    if (!hcoData || hcoData.length === 0) return []
-
-    const states = new Set()
-    hcoData.forEach((item) => {
-      const state = extractState(item.address)
-      if (state) {
-        states.add(state)
-      }
-    })
-
-    return Array.from(states)
-  }
-
-  // Fetch data on component mount
+  // Fetch available years on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
+    const fetchAvailableYears = async () => {
       try {
-        // Fetch all data in parallel
-        const [kpiResponse, quarterResponse, hcoResponse] = await Promise.all([
-          fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape-kpicard"),
-          fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape-quater"),
-          fetch("https://hcp-hco-backend.onrender.com/hco-360"),
-        ])
+        setLoading(true)
+        // Fetch data without year filter to get all records
+        const response = await fetch("http://127.0.0.1:5000/fetch-hcolandscape")
+        const jsonData = await response.json()
 
-        const kpiResult = await kpiResponse.json()
-        const quarterResult = await quarterResponse.json()
-        const hcoResult = await hcoResponse.json()
+        // Extract unique years from the data
+        const years = [...new Set(jsonData.map((item) => item.year))]
+          .filter((year) => year && year !== "-")
+          .sort((a, b) => a - b) // Sort years in ascending order
 
-        setKpiData(kpiResult[0]) // Assuming the API returns an array with one object
-        setQuarterData(quarterResult)
-        setHcoData(hcoResult)
+        // Update filter options with available years
+        setFilterOptions((prev) => ({
+          ...prev,
+          years: years.length > 0 ? years : ["2024"], // Default to 2024 if no years found
+        }))
+
+        // Set default year to the most recent year
+        if (years.length > 0) {
+          const mostRecentYear = years[years.length - 1]
+          setFilters((prev) => ({
+            ...prev,
+            year: mostRecentYear,
+          }))
+        }
+
+        // Set the data
+        setData(jsonData)
+
+        // Extract other filter options
+        extractFilterOptions(jsonData)
+
+        setLoading(false)
       } catch (error) {
-        console.error("Error fetching data:", error)
-      } finally {
+        console.error("Error fetching available years:", error)
+        // Fallback to default years if there's an error
+        setFilterOptions((prev) => ({
+          ...prev,
+          years: ["2024"],
+        }))
         setLoading(false)
       }
     }
 
-    fetchData()
-  }, [])
+    fetchAvailableYears()
+  }, []) // Empty dependency array ensures this runs only once on component mount
 
-  // Process facility type data
-  const processFacilityTypeData = () => {
-    if (!hcoData || hcoData.length === 0) return []
+  // Process data when filters change
+  useEffect(() => {
+    if (data.length > 0) {
+      processData()
+    }
+  }, [data, filters])
 
-    // Count occurrences of each hco_grouping, excluding '-'
-    const groupingCounts = {}
-    hcoData.forEach((item) => {
-      const grouping = item.hco_grouping
-      if (grouping && grouping !== "-") {
-        groupingCounts[grouping] = (groupingCounts[grouping] || 0) + 1
-      }
-    })
+  // Update paginated table data when page or rows per page changes
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage
+    const endIndex = startIndex + rowsPerPage
+    setAccountTableData(allAccountTableData.slice(startIndex, endIndex))
+  }, [currentPage, rowsPerPage, allAccountTableData])
 
-    // Convert to array format for pie chart
-    const colors = ["#00599D", "#6A99B5", "#7DFFA8", "#F0C3F7", "#C8E3F5"]
-    return Object.entries(groupingCounts).map(([name, value], index) => ({
-      name,
-      value,
-      color: colors[index % colors.length],
+  const extractFilterOptions = (data) => {
+    // Extract unique age groups
+    const ages = ["All", ...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
+
+    // Extract unique brands (drug names)
+    const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
+
+    // Extract unique states
+    const states = ["All", ...new Set(data.map((item) => item.hco_state).filter((state) => state && state !== "-"))]
+
+    setFilterOptions((prev) => ({
+      ...prev,
+      ages,
+      brands,
+      states,
     }))
   }
 
-  // Process HCO tier data
-  const processHcoTierData = () => {
-    if (!hcoData || hcoData.length === 0) return []
-  
-    const tierMap = new Map()
-  
-    // Group by tier and collect unique hco_mdm
-    hcoData.forEach((item) => {
-      const tier = item.hco_mdm_tier
-      const hcoId = item.hco_mdm
-  
-      if (tier && tier !== "-" && hcoId && hcoId !== "-") {
-        if (!tierMap.has(tier)) {
-          tierMap.set(tier, new Set())
-        }
-        tierMap.get(tier).add(hcoId)
-      }
-    })
-  
-    const colors = ["#B073FE", "#FDBA74", "#B4F06C", "#6EE79A"]
-  
-    // Sort tier entries - assuming tier is like "Tier 1", "Tier 2", etc.
-    const sortedEntries = Array.from(tierMap.entries()).sort(([a], [b]) => {
-      const aNum = parseInt(a.replace(/\D/g, ""), 10)
-      const bNum = parseInt(b.replace(/\D/g, ""), 10)
-      return aNum - bNum
-    })
-  
-    return sortedEntries.map(([label, hcoSet], index) => ({
-      label,
-      value: hcoSet.size,
-      color: colors[index % colors.length],
-    }))
+  const processData = () => {
+    // Apply filters to get filtered data
+    const filteredData = getFilteredData()
+
+    // Calculate KPI metrics
+    calculateKPIMetrics(filteredData)
+
+    // Process quarterly patient data
+    processQuarterlyData(filteredData)
+
+    // Process facility type data
+    processFacilityTypeData(filteredData)
+
+    // Process HCO tier data
+    processHcoTierData(filteredData)
+
+    // Process accounts table data
+    processAccountsTableData(filteredData)
   }
-  
 
-  // Apply filters to hcoData
-  const getFilteredHcoData = () => {
-    if (!hcoData || hcoData.length === 0) return []
+  const getFilteredData = () => {
+    return data.filter((item) => {
+      // Year filter (always apply)
+      if (item.year !== filters.year) return false
 
-    return hcoData.filter((item) => {
       // Age filter
-      if (filters.ageFilter !== "All" && item.age_group !== filters.ageFilter) {
-        return false
-      }
+      if (filters.ageFilter !== "All" && item.age_group !== filters.ageFilter) return false
 
       // Brand filter
-      if (filters.brand !== "All" && item.drug_name !== filters.brand) {
-        return false
-      }
+      if (filters.brand !== "All" && item.drug_name !== filters.brand) return false
 
       // State filter
-      const itemState = extractState(item.address)
-      if (filters.state !== "All" && itemState !== filters.state) {
-        return false
-      }
+      if (filters.state !== "All" && item.hco_state !== filters.state) return false
 
       // KOL filter
-      if (filters.kol !== "All" && item.kol !== filters.kol) {
-        return false
-      }
+      if (filters.kol !== "All" && item.kol !== filters.kol) return false
 
       // Zolgensma prescriber filter
-      if (filters.zolgPrescriber !== "All" && item.zolg_prescriber !== filters.zolgPrescriber) {
-        return false
-      }
+      if (filters.zolgPrescriber !== "All" && item.zolg_prescriber !== filters.zolgPrescriber) return false
 
       // Zolgensma IV target filter
-      if (filters.zolgIVTarget !== "All" && item.zolgensma_iv_target !== filters.zolgIVTarget) {
-        return false
-      }
+      if (filters.zolgIVTarget !== "All" && item.zolgensma_iv_target !== filters.zolgIVTarget) return false
 
       return true
     })
   }
 
-  // Process accounts table data
-  const processAccountsTableData = () => {
-    const filteredData = getFilteredHcoData()
-    if (filteredData.length === 0) return []
+  const calculateKPIMetrics = (filteredData) => {
+    // Count unique rendering HCOs (rend_hco_npi)
+    const renderingHCOs = new Set(filteredData.map((item) => item.rend_hco_npi).filter((npi) => npi && npi !== "-"))
+      .size
 
-    // Group by hco_mdm to get unique accounts
+    // Count unique patients
+    const uniquePatients = new Set(filteredData.map((item) => item.patient_id).filter((id) => id && id !== "-")).size
+
+    // Calculate average patients per HCO
+    const avgPatientsPerHCO = renderingHCOs > 0 ? uniquePatients / renderingHCOs : 0
+
+    // Count patients referred (where ref_hco_npi_mdm is not "-")
+    const referredPatients = new Set(
+      filteredData
+        .filter((item) => item.ref_hco_npi_mdm && item.ref_hco_npi_mdm !== "-")
+        .map((item) => item.patient_id)
+        .filter((id) => id && id !== "-"),
+    ).size
+
+    // Count unique referring HCOs (ref_hco_npi_mdm)
+    const referringHCOs = new Set(filteredData.map((item) => item.ref_hco_npi_mdm).filter((npi) => npi && npi !== "-"))
+      .size
+
+    setKpiData({
+      renderingHCOs,
+      patientsLast12M: uniquePatients,
+      avgPatientsPerHCO,
+      patientsReferred: referredPatients,
+      referringHCOs,
+    })
+  }
+
+  const processQuarterlyData = (filteredData) => {
+    // Group patients by quarter
+    const quarterCounts = {}
+
+    filteredData.forEach((item) => {
+      if (item.quarter && item.patient_id && item.patient_id !== "-") {
+        const quarter = Number.parseInt(item.quarter)
+        if (!quarterCounts[quarter]) {
+          quarterCounts[quarter] = new Set()
+        }
+        quarterCounts[quarter].add(item.patient_id)
+      }
+    })
+
+    // Format for chart
+    const formattedQuarterData = Object.entries(quarterCounts)
+      .map(([quarter, patients]) => ({
+        month: `Quarter ${quarter}`,
+        Patients: patients.size,
+      }))
+      .sort((a, b) => {
+        const quarterA = Number.parseInt(a.month.substring(8))
+        const quarterB = Number.parseInt(b.month.substring(8))
+        return quarterA - quarterB
+      })
+
+    setQuarterData(formattedQuarterData)
+  }
+
+  const processFacilityTypeData = (filteredData) => {
+    // Group by hco_grouping and count unique patients
+    const groupingMap = new Map()
+
+    filteredData.forEach((item) => {
+      if (item.hco_grouping && item.hco_grouping !== "-" && item.patient_id && item.patient_id !== "-") {
+        if (!groupingMap.has(item.hco_grouping)) {
+          groupingMap.set(item.hco_grouping, new Set())
+        }
+        groupingMap.get(item.hco_grouping).add(item.patient_id)
+      }
+    })
+
+    // Convert to array format for pie chart
+    const colors = ["#00599D", "#6A99B5", "#7DFFA8", "#F0C3F7", "#C8E3F5"]
+    const result = Array.from(groupingMap.entries())
+      .map(([name, patients], index) => ({
+        name,
+        value: patients.size,
+        color: colors[index % colors.length],
+      }))
+      .sort((a, b) => b.value - a.value) // Sort by value in descending order
+
+    setFacilityTypeData(result)
+  }
+
+  const processHcoTierData = (filteredData) => {
+    // Group by hco_mdm_tier and count unique HCOs
+    const tierMap = new Map()
+
+    filteredData.forEach((item) => {
+      if (item.hco_mdm_tier && item.hco_mdm_tier !== "-" && item.rend_hco_npi && item.rend_hco_npi !== "-") {
+        if (!tierMap.has(item.hco_mdm_tier)) {
+          tierMap.set(item.hco_mdm_tier, new Set())
+        }
+        tierMap.get(item.hco_mdm_tier).add(item.rend_hco_npi)
+      }
+    })
+
+    // Convert to array format for chart
+    const colors = ["#B073FE", "#FDBA74", "#B4F06C", "#6EE79A"]
+
+    // Sort tier entries - assuming tier is like "Tier 1", "Tier 2", etc.
+    const sortedEntries = Array.from(tierMap.entries()).sort(([a], [b]) => {
+      const aNum = Number.parseInt(a.replace(/\D/g, ""), 10) || 0
+      const bNum = Number.parseInt(b.replace(/\D/g, ""), 10) || 0
+      return aNum - bNum
+    })
+
+    const result = sortedEntries.map(([label, hcoSet], index) => ({
+      label,
+      value: hcoSet.size,
+      color: colors[index % colors.length],
+    }))
+
+    setHcoTierData(result)
+  }
+
+  const processAccountsTableData = (filteredData) => {
+    // Group by rend_hco_npi to get unique accounts
     const accountsMap = new Map()
 
     filteredData.forEach((item) => {
-      if (!item.hco_mdm || item.hco_mdm === "-") return
+      if (item.rend_hco_npi && item.rend_hco_npi !== "-") {
+        const hcoId = item.rend_hco_npi
 
-      if (!accountsMap.has(item.hco_mdm)) {
-        accountsMap.set(item.hco_mdm, {
-          accountId: item.hco_mdm,
-          hcps: new Set(),
-          patients: 0,
-          affiliatedAccount: item.hco_mdm_name || "-",
-          tier: item.hco_mdm_tier || "-",
-          archetype: item.hco_grouping || "-",
-          state: extractState(item.address) || "-",
-        })
+        if (!accountsMap.has(hcoId)) {
+          accountsMap.set(hcoId, {
+            accountId: hcoId,
+            hcps: new Set(),
+            patients: new Set(),
+            affiliatedAccount: item.hco_mdm_name || "-",
+            tier: item.hco_mdm_tier || "-",
+            archetype: item.hco_grouping || "-",
+            state: item.hco_state || "-",
+          })
+        }
+
+        const account = accountsMap.get(hcoId)
+        // Add HCP if it exists
+        if (item.hcp_id && item.hcp_id !== "-") {
+          account.hcps.add(item.hcp_id)
+        }
+        // Add patient if it exists
+        if (item.patient_id && item.patient_id !== "-") {
+          account.patients.add(item.patient_id)
+        }
       }
-
-      const account = accountsMap.get(item.hco_mdm)
-      if (item.hcp_id && item.hcp_id !== "-") account.hcps.add(item.hcp_id)
-      if (item.patient_id && item.patient_id !== "-") account.patients += 1
     })
 
-    // Convert to array and sort by patient count
+    // Convert to array and format for table
     const accountsArray = Array.from(accountsMap.values()).map((account) => ({
       ...account,
       hcps: account.hcps.size,
+      patients: account.patients.size,
     }))
 
+    // Sort by patient count in descending order
     accountsArray.sort((a, b) => b.patients - a.patients)
 
     // Add rank and format for table
-    return accountsArray.slice(0, 5).map((account, index) => ({
+    const result = accountsArray.map((account, index) => ({
       Rank: `0${index + 1}`,
       "Account ID": account.accountId,
       "No. HCPs": account.hcps,
@@ -246,32 +364,61 @@ const AccountLandscape = () => {
       "Account Tier": account.tier,
       "Account Archetype": account.archetype,
     }))
+
+    // Store all table data
+    setAllAccountTableData(result)
+
+    // Set paginated data
+    const startIndex = (currentPage - 1) * rowsPerPage
+    const endIndex = startIndex + rowsPerPage
+    setAccountTableData(result.slice(startIndex, endIndex))
   }
 
-  // Format quarter data for line chart
-  const formatQuarterData = () => {
-    if (!quarterData || quarterData.length === 0) return []
-
-    return quarterData.map((item) => ({
-      month: `Quarter ${item.quarter}`,
-      "Archetype 1": item.patient_count,
+  // Handle filter changes
+  const handleFilterChange = (filterName, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterName]: value,
     }))
+
+    // Reset to first page when filters change
+    setCurrentPage(1)
+
+    // Close dropdown after selection
+    setOpenDropdown(null)
   }
 
-  // Calculate facility type data
-  const facilityTypeData = processFacilityTypeData()
+  // Toggle filter buttons
+  const toggleFilter = (filterName, value) => {
+    handleFilterChange(filterName, filters[filterName] === value ? "All" : value)
+  }
 
-  // Calculate HCO tier data
-  const potential_data = processHcoTierData()
-  const maxValue = Math.max(...potential_data.map((item) => item.value), 0)
+  // Toggle dropdown
+  const toggleDropdown = (dropdown) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown)
+  }
 
-  // Get accounts table data
-  const accountTableData = processAccountsTableData()
+  // Handle page change
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage)
+  }
 
-  // Get filter options
-  const ageOptions = getFilterOptions("age_group")
-  const brandOptions = getFilterOptions("drug_name")
-  const stateOptions = getStateOptions()
+  // Handle rows per page change
+  const handleRowsPerPageChange = (newRowsPerPage) => {
+    setRowsPerPage(newRowsPerPage)
+    setCurrentPage(1) // Reset to first page when changing rows per page
+  }
+
+  // Navigate to HCO details
+  const getHCODetails = (hcoId) => {
+    navigate("/hco", { state: { hco_id: hcoId } })
+  }
+
+  // Calculate max value for HCO tier data
+  const maxValue = hcoTierData.length > 0 ? Math.max(...hcoTierData.map((item) => item.value), 0) : 0
+
+  // Calculate total pages
+  const totalPages = Math.ceil(allAccountTableData.length / rowsPerPage)
 
   // Map data (using static data for now as it's not part of the API)
   const healthcareData = {
@@ -328,39 +475,175 @@ const AccountLandscape = () => {
     56: { abbr: "WY", patients: 29, hcps: 13, adoptionRate: 63 },
   }
 
-  // Handle filter changes
-  const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }))
-  }
-
-  // Toggle filter buttons
-  const toggleFilter = (filterName, value) => {
-    handleFilterChange(filterName, filters[filterName] === value ? "All" : value)
-  }
-
-  // Show dropdown options
-  const [openDropdown, setOpenDropdown] = useState(null)
-
-  const toggleDropdown = (dropdown) => {
-    setOpenDropdown(openDropdown === dropdown ? null : dropdown)
-  }
-
   if (loading) {
-    return  <div className="flex justify-center items-center h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                
-            </div>
-  }
-
-  const getHCODetails = (hcoId) => {
-    navigate("/hco", { state: { hco_id: hcoId } })
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-4 w-full p-2">
+      {/* Filters */}
+      <div className="flex gap-4 items-center">
+        {/* Year Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[100px]"
+            onClick={() => toggleDropdown("year")}
+          >
+            <span className="text-[12px] text-gray-600">Year: {filters.year}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "year" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.years.map((year) => (
+                <div
+                  key={year}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.year === year ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("year", year)}
+                >
+                  {year}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Age Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            onClick={() => toggleDropdown("age")}
+          >
+            <span className="text-[12px] text-gray-600">Age: {filters.ageFilter}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "age" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.ages.map((age) => (
+                <div
+                  key={age}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.ageFilter === age ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("ageFilter", age)}
+                >
+                  {age}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Brand Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            onClick={() => toggleDropdown("brand")}
+          >
+            <span className="text-[12px] text-gray-600">Brand: {filters.brand}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "brand" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.brands.map((brand) => (
+                <div
+                  key={brand}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.brand === brand ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("brand", brand)}
+                >
+                  {brand}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* State Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            onClick={() => toggleDropdown("state")}
+          >
+            <span className="text-[12px] text-gray-600">State: {filters.state}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "state" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.states.map((state) => (
+                <div
+                  key={state}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.state === state ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("state", state)}
+                >
+                  {state}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* KOL Filter */}
+        <div className="flex items-center rounded-xl border  py-1 gap-2  bg-white px-2">
+          <span className="text-gray-600 text-[10px]">KOL</span>
+          <button
+            onClick={() => toggleFilter("kol", "Yes")}
+            className={`text-${filters.kol === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.kol === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => toggleFilter("kol", "No")}
+            className={`text-${filters.kol === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.kol === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            No
+          </button>
+        </div>
+
+        {/* Zolgensma Prescriber Filter */}
+        <div className="flex items-center rounded-xl border  py-1 gap-2  bg-white px-2">
+          <span className="text-gray-600 text-[10px]">Zolgensma Prescriber</span>
+          <button
+            onClick={() => toggleFilter("zolgPrescriber", "Yes")}
+            className={`text-${filters.zolgPrescriber === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgPrescriber === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => toggleFilter("zolgPrescriber", "No")}
+            className={`text-${filters.zolgPrescriber === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgPrescriber === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            No
+          </button>
+        </div>
+
+        {/* Zolgensma IV Target Filter */}
+        <div className="flex items-center rounded-xl border py-1 gap-2  bg-white px-2">
+          <span className="text-gray-600 text-[10px]">Zolgensma IV Target</span>
+          <button
+            onClick={() => toggleFilter("zolgIVTarget", "Yes")}
+            className={`text-${filters.zolgIVTarget === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgIVTarget === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => toggleFilter("zolgIVTarget", "No")}
+            className={`text-${filters.zolgIVTarget === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgIVTarget === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
+          >
+            No
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
@@ -369,7 +652,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Rendering HCOs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.hco_count}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCOs}</span>
         </div>
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex flex-col justify-between h-full">
@@ -381,7 +664,7 @@ const AccountLandscape = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.pt_12_mth}</span>
+              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M}</span>
               <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
               <span className="text-green-500 text-xs">5.2%</span>
               <span className="text-gray-500 text-xs">vs last month</span>
@@ -396,7 +679,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Treated per HCOs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avg_patients_per_hco.toFixed(2)}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avgPatientsPerHCO.toFixed(2)}</span>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -406,7 +689,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Referred in Last 12M</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.ref_pt_12_mth}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.patientsReferred}</span>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -416,21 +699,21 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Referring HCOs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.ref_hco_npi_mdm}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCOs}</span>
         </div>
       </div>
+
+      {/* Charts - First Row */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-56 p-2">
           <span className="text-gray-500 text-[11px] font-[500] pb-4">#QoQ SMA Treated Patients by Archetype</span>
           <ResponsiveContainer width="100%" height="90%">
-            <LineChart data={formatQuarterData()}>
+            <LineChart data={quarterData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-
-              {/* Lines for each Archetype */}
-              <Line type="monotone" dataKey="Archetype 1" stroke="#0b5cab" strokeWidth={2} />
+              <Line type="monotone" dataKey="Patients" stroke="#0b5cab" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -470,11 +753,12 @@ const AccountLandscape = () => {
         </div>
       </div>
 
+      {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-60 p-2">
           <span className="text-gray-500 text-[11px] font-[500] pb-4">HCO Tier by SMA Patients Potential</span>
           <div className="flex flex-col space-y-3 flex-grow justify-around pr-2">
-            {potential_data.map((item, index) => (
+            {hcoTierData.map((item, index) => (
               <div key={index} className="flex flex-col items-center w-full">
                 <div className="flex items-center w-full">
                   <span className="text-gray-500 text-[10px] w-[120px] shrink-0 mr-2">{item.label}</span>
@@ -517,170 +801,26 @@ const AccountLandscape = () => {
         </div>
       </div>
 
+      {/* Accounts Table */}
       <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
-        <div className="flex gap-2 items-center p-2">
-          <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-            <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
-          </div>
-          <span className="text-gray-500 text-[11px] font-[500]">Accounts List</span>
-
+        <div className="flex justify-between items-center p-2">
           <div className="flex gap-2 items-center">
-            <div className="relative">
-              <div
-                className="flex items-center rounded-xl border p-1 gap-1 cursor-pointer"
-                onClick={() => toggleDropdown("age")}
-              >
-                <span className="text-gray-600 text-[10px]">
-                  Age Filter: {filters.ageFilter === "All" ? "All" : filters.ageFilter}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-500" />
-              </div>
-              {openDropdown === "age" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10">
-                  <div
-                    className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      handleFilterChange("ageFilter", "All")
-                      setOpenDropdown(null)
-                    }}
-                  >
-                    All
-                  </div>
-                  {ageOptions.map((option, index) => (
-                    <div
-                      key={index}
-                      className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        handleFilterChange("ageFilter", option)
-                        setOpenDropdown(null)
-                      }}
-                    >
-                      {option}
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+              <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
-
-            <div className="relative">
-              <div
-                className="flex items-center rounded-xl border p-1 gap-1 cursor-pointer"
-                onClick={() => toggleDropdown("brand")}
-              >
-                <span className="text-gray-600 text-[10px]">
-                  Brand: {filters.brand === "All" ? "All" : filters.brand}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-500" />
-              </div>
-              {openDropdown === "brand" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10">
-                  <div
-                    className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      handleFilterChange("brand", "All")
-                      setOpenDropdown(null)
-                    }}
-                  >
-                    All
-                  </div>
-                  {brandOptions.map((option, index) => (
-                    <div
-                      key={index}
-                      className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        handleFilterChange("brand", option)
-                        setOpenDropdown(null)
-                      }}
-                    >
-                      {option}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <div
-                className="flex items-center rounded-xl border p-1 gap-1 cursor-pointer"
-                onClick={() => toggleDropdown("state")}
-              >
-                <span className="text-gray-600 text-[10px]">
-                  State: {filters.state === "All" ? "All" : filters.state}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-500" />
-              </div>
-              {openDropdown === "state" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 max-h-32 overflow-y-auto">
-                  <div
-                    className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                    onClick={() => {
-                      handleFilterChange("state", "All")
-                      setOpenDropdown(null)
-                    }}
-                  >
-                    All
-                  </div>
-                  {stateOptions.map((option, index) => (
-                    <div
-                      key={index}
-                      className="p-1 text-[10px] hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        handleFilterChange("state", option)
-                        setOpenDropdown(null)
-                      }}
-                    >
-                      {option}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center rounded-xl border p-1 gap-2">
-              <span className="text-gray-600 text-[10px]">KOL</span>
-              <button
-                onClick={() => toggleFilter("kol", "Yes")}
-                className={`text-${filters.kol === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.kol === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => toggleFilter("kol", "No")}
-                className={`text-${filters.kol === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.kol === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                No
-              </button>
-            </div>
-            <div className="flex items-center rounded-xl border p-1 gap-2">
-              <span className="text-gray-600 text-[10px]">Zolgensma Prescriber</span>
-              <button
-                onClick={() => toggleFilter("zolgPrescriber", "Yes")}
-                className={`text-${filters.zolgPrescriber === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgPrescriber === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => toggleFilter("zolgPrescriber", "No")}
-                className={`text-${filters.zolgPrescriber === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgPrescriber === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                No
-              </button>
-            </div>
-            <div className="flex items-center rounded-xl border p-1 gap-2">
-              <span className="text-gray-600 text-[10px]">Zolgensma IV Target</span>
-              <button
-                onClick={() => toggleFilter("zolgIVTarget", "Yes")}
-                className={`text-${filters.zolgIVTarget === "Yes" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgIVTarget === "Yes" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => toggleFilter("zolgIVTarget", "No")}
-                className={`text-${filters.zolgIVTarget === "No" ? "blue-600" : "gray-600"} text-[9px] bg-${filters.zolgIVTarget === "No" ? "blue" : "gray"}-100 rounded-md px-1`}
-              >
-                No
-              </button>
-            </div>
+            <span className="text-gray-500 text-[11px] font-[500]">Accounts List</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-[11px]">Show rows:</span>
+            <select
+              className="border border-gray-300 rounded text-[11px] p-1"
+              value={rowsPerPage}
+              onChange={(e) => handleRowsPerPageChange(Number(e.target.value))}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+            </select>
           </div>
         </div>
 
@@ -702,10 +842,14 @@ const AccountLandscape = () => {
               {accountTableData.map((hco, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
                   <td className="p-2">{hco.Rank}</td>
-                  <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">{hco["Account ID"]}</td>
+                  <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">
+                    {hco["Account ID"]}
+                  </td>
                   <td className="p-2">{hco["No. HCPs"]}</td>
                   <td className="p-2">{hco["SMA. Patients"]}</td>
-                  <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">{hco["Affiliated Account"]}</td>
+                  <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">
+                    {hco["Affiliated Account"]}
+                  </td>
                   <td className="p-2">{hco["Account Tier"]}</td>
                   <td className="p-2">{hco["Account Archetype"]}</td>
                 </tr>
@@ -713,10 +857,44 @@ const AccountLandscape = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center py-2 border-t border-gray-200">
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              Previous
+            </button>
+
+            <div className="flex mx-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`w-6 h-6 mx-1 rounded-full text-[10px] ${
+                    currentPage === page ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                  }`}
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 export default AccountLandscape
-

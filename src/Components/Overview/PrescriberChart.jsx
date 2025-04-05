@@ -20,22 +20,22 @@ const PrescriberClusterChart = ({ hcpData }) => {
 
     hcpData.forEach(record => {
       if (record.hcp_segment && record.hcp_id) {
-        const segment = record.hcp_segment.toUpperCase();
-        if (!segmentPatientMap.has(segment)) {
-          segmentPatientMap.set(segment, new Set());
+        const rawSegment = record.hcp_segment.toUpperCase();
+        const formattedSegment = formatSegmentName(rawSegment);
+        if (!segmentPatientMap.has(formattedSegment)) {
+          segmentPatientMap.set(formattedSegment, new Set());
         }
-        segmentPatientMap.get(segment).add(record.hcp_id);
+        segmentPatientMap.get(formattedSegment).add(record.hcp_id);
       }
     });
 
     const result = Array.from(segmentPatientMap).map(([name, patientSet]) => ({
-      name: formatSegmentName(name),
+      name,
       value: patientSet.size,
-      raw: name
     }));
 
-    const orderMap = { 'HIGH': 0, 'MODERATE': 1, 'LOW': 2, 'V. LOW': 3 };
-    result.sort((a, b) => (orderMap[a.raw] ?? 999) - (orderMap[b.raw] ?? 999));
+    const orderMap = { 'High': 0, 'Moderate': 1, 'Low': 2, 'V. Low': 3 };
+    result.sort((a, b) => (orderMap[a.name] ?? 999) - (orderMap[b.name] ?? 999));
 
     return result;
   }, [hcpData]);
@@ -64,12 +64,12 @@ const PrescriberClusterChart = ({ hcpData }) => {
               layout="vertical"
               data={segmentData}
               margin={{ top: 10, right: 20, left: -10, bottom: 20 }}
-              barCategoryGap="20%"
+              
             >
               <XAxis type="number" hide />
               <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 10 }} />
-              <Tooltip cursor={{ fill: '#f0f0f0' }} />
-              <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+              <Tooltip cursor={{ fill: '#f0f0f0' }}  wrapperStyle={{ fontSize: '10px' }}/>
+              <Bar dataKey="value" radius={[0, 10, 10, 0]}>
                 {segmentData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}

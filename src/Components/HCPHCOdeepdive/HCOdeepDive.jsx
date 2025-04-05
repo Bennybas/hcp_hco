@@ -1,3 +1,5 @@
+"use client"
+
 import { ArrowLeft } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
@@ -22,7 +24,7 @@ import * as d3 from "d3"
 const HCOdeepDive = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const hcoMdm = location.state?.hco_id || "15046286" // Default HCO MDM if none provided
+  const hcoMdm = location.state?.hco_id || "Unknown HCO" 
   const [loading, setLoading] = useState(true)
   const [hcoData, setHcoData] = useState([])
   const [hcoDetails, setHcoDetails] = useState({})
@@ -35,6 +37,14 @@ const HCOdeepDive = () => {
   const [allReferralData, setAllReferralData] = useState([])
   const [activeTab, setActiveTab] = useState("all")
 
+  // Table pagination state
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  // Loading states
+  const [tableLoading, setTableLoading] = useState(true)
+  const [referralLoading, setReferralLoading] = useState(true)
+
   // Ref for the network graph container
   const networkRef = useRef(null)
   // Ref to track if the graph has been rendered
@@ -44,12 +54,22 @@ const HCOdeepDive = () => {
     const fetchHCOData = async () => {
       try {
         setLoading(true)
+        setTableLoading(true)
+        setReferralLoading(true)
+
         const hcoUrl = `https://hcp-hco-backend.onrender.com/hco-360?hco_mdm=${encodeURIComponent(hcoMdm)}`
         const response = await fetch(hcoUrl)
         const data = await response.json()
 
         setHcoData(data)
         processHCOData(data)
+
+        // Fetch referral data separately
+        const referralUrl = `http://127.0.0.1:5000/hco-360?ref_hco_npi_mdm=${encodeURIComponent(hcoMdm)}`
+        const referralResponse = await fetch(referralUrl)
+        const referralData = await referralResponse.json()
+
+        processReferralData(referralData)
       } catch (error) {
         console.error("Error fetching HCO data:", error)
       } finally {
@@ -261,48 +281,61 @@ const HCOdeepDive = () => {
       affiliatedHcps.sort((a, b) => b.patientCount - a.patientCount)
 
       setAffiliatedHcpsData(affiliatedHcps)
-
-      // Process Referral Out data
-      const referralMap = new Map()
-
-      data.forEach((record) => {
-        if (!record.ref_npi || record.ref_npi === "-") return
-
-        const refHcoName = record.ref_name !== "-" ? record.ref_name : "Unknown HCO"
-        const key = refHcoName
-
-        if (!referralMap.has(key)) {
-          referralMap.set(key, {
-            accountName: refHcoName,
-            accountArchetype: record.hco_grouping || "Unknown",
-            hcoTier: record.hco_mdm_tier || "Unknown",
-            spinrazaSite: "", // Leave blank as requested
-            patients: new Set(),
-            isWithinInstitute: refHcoName === firstRecord.hco_mdm_name,
-          })
-        }
-
-        if (record.patient_id) {
-          referralMap.get(key).patients.add(record.patient_id)
-        }
-      })
-
-      // Convert to array with patient counts
-      const referralArray = Array.from(referralMap.values()).map((item) => ({
-        accountName: item.accountName,
-        accountArchetype: item.accountArchetype,
-        hcoTier: item.hcoTier,
-        spinrazaSite: item.spinrazaSite,
-        patientCount: item.patients.size,
-        isWithinInstitute: item.isWithinInstitute,
-      }))
-
-      // Sort by patient count
-      referralArray.sort((a, b) => b.patientCount - a.patientCount)
-
-      setAllReferralData(referralArray)
-      filterReferralData("all", referralArray)
+      setTableLoading(false)
     }
+  }
+
+  // Process Referral data
+  const processReferralData = (data) => {
+    if (!data || data.length === 0) {
+      setAllReferralData([])
+      filterReferralData("all", [])
+      setReferralLoading(false)
+      return
+    }
+
+    // Group by HCO MDM name to get unique referring HCOs
+    const referralMap = new Map()
+
+    data.forEach((record) => {
+      // Use hco_mdm_name as the key for referring HCO
+      const refHcoName =
+        record.hco_mdm_name && record.hco_mdm_name !== "-"
+          ? record.hco_mdm_name
+          : record.ref_name && record.ref_name !== "-"
+            ? record.ref_name
+            : "Unknown HCO"
+
+      if (!refHcoName || refHcoName === "-") return
+
+      const key = refHcoName
+
+      if (!referralMap.has(key)) {
+        referralMap.set(key, {
+          accountName: refHcoName,
+          patients: new Set(),
+          isWithinInstitute: false, // Default to false, will be updated if needed
+        })
+      }
+
+      if (record.patient_id) {
+        referralMap.get(key).patients.add(record.patient_id)
+      }
+    })
+
+    // Convert to array with patient counts
+    const referralArray = Array.from(referralMap.values()).map((item) => ({
+      accountName: item.accountName,
+      patientCount: item.patients.size,
+      isWithinInstitute: item.isWithinInstitute,
+    }))
+
+    // Sort by patient count
+    referralArray.sort((a, b) => b.patientCount - a.patientCount)
+
+    setAllReferralData(referralArray)
+    filterReferralData("all", referralArray)
+    setReferralLoading(false)
   }
 
   // Filter referral data based on active tab
@@ -320,21 +353,37 @@ const HCOdeepDive = () => {
   const handleTabChange = (tab) => {
     if (tab === activeTab) return // Don't rerender if the tab hasn't changed
     setActiveTab(tab)
-    filterReferralData(tab)
-    // Reset the graph rendered flag when changing tabs
-    graphRenderedRef.current = false
+    setReferralLoading(true)
+
+    // Short delay to show loading state
+    setTimeout(() => {
+      filterReferralData(tab)
+      setReferralLoading(false)
+      // Reset the graph rendered flag when changing tabs
+      graphRenderedRef.current = false
+    }, 500)
   }
+
+  // Handle rows per page change
+  const handleRowsPerPageChange = (newRowsPerPage) => {
+    setRowsPerPage(newRowsPerPage)
+    setCurrentPage(1) // Reset to first page when changing rows per page
+  }
+
+  // Calculate pagination for table
+  const paginatedHcpsData = affiliatedHcpsData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
+
+  const totalPages = Math.ceil(affiliatedHcpsData.length / rowsPerPage)
 
   // Effect to render the network graph when referral data changes
   useEffect(() => {
-    if (networkRef.current && !graphRenderedRef.current) {
+    if (networkRef.current && !graphRenderedRef.current && !referralLoading) {
       renderNetworkGraph()
       graphRenderedRef.current = true
     }
-  }, [referralData])
+  }, [referralData, referralLoading])
 
-  // Replace the renderNetworkGraph function with this improved version that adds more vertical spacing and zoom functionality
-
+  // Updated renderNetworkGraph function that simplifies the visualization
   const renderNetworkGraph = () => {
     try {
       // Safely clear previous graph
@@ -352,7 +401,7 @@ const HCOdeepDive = () => {
       const innerWidth = width - margin.left - margin.right
       const innerHeight = height - margin.top - margin.bottom
 
-      // Create SVG
+      // Create SVG with zoom functionality
       const svg = d3
         .select(networkRef.current)
         .append("svg")
@@ -385,133 +434,61 @@ const HCOdeepDive = () => {
       }
       nodes.push(rootNode)
 
-      // Group referrals by archetype and tier
-      const archetypeGroups = {}
+      // Color scale for referred HCOs
+      const colorScale = d3
+        .scaleOrdinal()
+        .domain(referralData.map((d) => d.accountName))
+        .range([
+          "#f28e2b",
+          "#e15759",
+          "#76b7b2",
+          "#59a14f",
+          "#edc949",
+          "#af7aa1",
+          "#ff9da7",
+          "#9c755f",
+          "#bab0ab",
+          "#d37295",
+          "#a173d1",
+          "#6b6ecf",
+        ])
 
-      referralData.forEach((referral) => {
-        const archetype = referral.accountArchetype || "Unknown"
-        const tier = referral.hcoTier || "Unknown"
-
-        if (!archetypeGroups[archetype]) {
-          archetypeGroups[archetype] = {}
+      // Add referred HCO nodes directly connected to the root
+      referralData.forEach((referral, index) => {
+        const referredNode = {
+          id: `referred-${index}`,
+          name: referral.accountName,
+          type: "referred",
+          level: 1,
+          patients: referral.patientCount,
+          color: colorScale(referral.accountName),
+          x: innerWidth * 0.7, // Position at 70% of the width
+          y: 0, // Will be calculated later
         }
+        nodes.push(referredNode)
 
-        if (!archetypeGroups[archetype][tier]) {
-          archetypeGroups[archetype][tier] = []
-        }
-
-        archetypeGroups[archetype][tier].push(referral)
-      })
-
-      // Calculate positions for each level
-      const archetypeLevel = innerWidth / 4 // Position at 1/4 of the width
-      const tierLevel = innerWidth / 2 // Position at 1/2 of the width
-      const accountLevel = (innerWidth * 3) / 4 // Position at 3/4 of the width
-
-      // Add archetype, tier, and account nodes
-      let archetypeIndex = 0
-      let tierIndex = 0
-      let accountIndex = 0
-
-      // Track nodes by type to avoid duplicates
-      const archetypeNodes = {}
-      const tierNodes = {}
-
-      Object.entries(archetypeGroups).forEach(([archetypeName, tiers]) => {
-        // Create archetype node if not exists
-        if (!archetypeNodes[archetypeName]) {
-          const archetypeNode = {
-            id: `archetype-${archetypeIndex}`,
-            name: archetypeName,
-            type: "archetype",
-            level: 1,
-            x: archetypeLevel,
-            y: 0, // Will be calculated later
-          }
-          archetypeNodes[archetypeName] = archetypeNode
-          nodes.push(archetypeNode)
-          archetypeIndex++
-
-          // Link from root to archetype
-          links.push({
-            source: rootNode.id,
-            target: archetypeNode.id,
-            value: 1,
-          })
-        }
-
-        Object.entries(tiers).forEach(([tierName, accounts]) => {
-          // Create tier node if not exists
-          const tierKey = `${archetypeName}-${tierName}`
-          if (!tierNodes[tierKey]) {
-            const tierNode = {
-              id: `tier-${tierIndex}`,
-              name: tierName,
-              type: "tier",
-              level: 2,
-              archetypeId: archetypeNodes[archetypeName].id,
-              x: tierLevel,
-              y: 0, // Will be calculated later
-            }
-            tierNodes[tierKey] = tierNode
-            nodes.push(tierNode)
-            tierIndex++
-
-            // Link from archetype to tier
-            links.push({
-              source: archetypeNodes[archetypeName].id,
-              target: tierNode.id,
-              value: 1,
-            })
-          }
-
-          // Add account nodes for this tier
-          accounts.forEach((account) => {
-            const accountNode = {
-              id: `account-${accountIndex}`,
-              name: account.accountName,
-              type: "account",
-              level: 3,
-              tierId: tierNodes[tierKey].id,
-              patients: account.patientCount || 0,
-              x: accountLevel,
-              y: 0, // Will be calculated later
-            }
-            nodes.push(accountNode)
-            accountIndex++
-
-            // Link from tier to account
-            links.push({
-              source: tierNodes[tierKey].id,
-              target: accountNode.id,
-              value: account.patientCount,
-            })
-          })
+        // Link from root to referred HCO
+        links.push({
+          source: rootNode.id,
+          target: referredNode.id,
+          value: referral.patientCount,
         })
       })
 
-      // Calculate y-positions for nodes at each level with increased spacing
-      const nodesByLevel = [
-        [rootNode], // Level 0 - Current HCO
-        nodes.filter((n) => n.level === 1), // Level 1 - Archetypes
-        nodes.filter((n) => n.level === 2), // Level 2 - Tiers
-        nodes.filter((n) => n.level === 3), // Level 3 - Accounts
-      ]
+      // Calculate y-positions for referred HCO nodes with increased spacing
+      const referredNodes = nodes.filter((n) => n.level === 1)
 
-      // Position nodes at each level with increased vertical spacing
-      nodesByLevel.forEach((levelNodes, level) => {
-        // Increase padding for account nodes (level 3)
-        const nodePadding = level === 3 ? 40 : 20
+      // Increase vertical spacing between nodes
+      const nodePadding = 50
 
-        // Calculate total height needed for this level
-        const totalNodesHeight = levelNodes.length * nodePadding
+      // Calculate total height needed
+      const totalNodesHeight = referredNodes.length * nodePadding
 
-        // Start position - center the group of nodes
-        const startY = Math.max(0, (innerHeight - totalNodesHeight) / 2)
+      // Start position - center the group of nodes
+      const startY = Math.max(0, (innerHeight - totalNodesHeight) / 2)
 
-        levelNodes.forEach((node, i) => {
-          node.y = startY + i * nodePadding
-        })
+      referredNodes.forEach((node, i) => {
+        node.y = startY + i * nodePadding
       })
 
       // Create node-to-node mapping for links
@@ -533,12 +510,15 @@ const HCOdeepDive = () => {
           const midX = (source.x + target.x) / 2
 
           return `M${source.x},${source.y} 
-                C${midX},${source.y} 
-                 ${midX},${target.y} 
-                 ${target.x},${target.y}`
+              C${midX},${source.y} 
+               ${midX},${target.y} 
+               ${target.x},${target.y}`
         })
         .attr("fill", "none")
-        .attr("stroke", "#ccc")
+        .attr("stroke", (d) => {
+          const target = nodeMap[d.target]
+          return target.color || "#ccc"
+        })
         .attr("stroke-width", (d) => Math.sqrt(d.value) + 1)
         .attr("opacity", 0.7)
 
@@ -556,16 +536,13 @@ const HCOdeepDive = () => {
         .append("circle")
         .attr("r", (d) => {
           if (d.type === "current") return 25
-          if (d.type === "archetype") return 20
-          if (d.type === "tier") return 15
-          if (d.type === "account") return 10 + Math.sqrt(d.patients || 1) * 1.5
+          // Scale referred HCO nodes based on patient count
+          if (d.type === "referred") return 10 + Math.sqrt(d.patients || 1) * 2
           return 10
         })
         .attr("fill", (d) => {
           if (d.type === "current") return "#0b5cab"
-          if (d.type === "archetype") return "#9370db"
-          if (d.type === "tier") return "#69a7ad"
-          if (d.type === "account") return "#f28e2b"
+          if (d.type === "referred") return d.color
           return "#ccc"
         })
         .attr("stroke", "#fff")
@@ -574,29 +551,18 @@ const HCOdeepDive = () => {
       // Add text labels
       nodeGroups
         .append("text")
-        .attr("x", (d) => {
-          if (d.level === 0) return -35
-          if (d.level === 3) return 20
-          return 0
-        })
-        .attr("y", (d) => {
-          if (d.level === 1 || d.level === 2) return -20
-          return 0
-        })
-        .attr("text-anchor", (d) => {
-          if (d.level === 0) return "end"
-          if (d.level === 3) return "start"
-          return "middle"
-        })
+        .attr("x", (d) => (d.level === 0 ? -35 : 20))
+        .attr("y", (d) => 0)
+        .attr("text-anchor", (d) => (d.level === 0 ? "end" : "start"))
         .attr("font-size", "11px")
         .attr("font-weight", "500")
         .attr("fill", "#333")
         .attr("dy", ".35em")
         .text((d) => d.name)
 
-      // Add patient count for account nodes
+      // Add patient count for referred HCO nodes
       nodeGroups
-        .filter((d) => d.type === "account")
+        .filter((d) => d.type === "referred")
         .append("text")
         .attr("x", 20)
         .attr("y", 15)
@@ -614,6 +580,34 @@ const HCOdeepDive = () => {
         .attr("font-size", "10px")
         .attr("fill", "#666")
         .text("Use mouse wheel to zoom, drag to pan")
+
+      // Create dynamic legend for referred HCOs
+      const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right - 120}, 20)`)
+
+      // Add legend title
+      legendGroup
+        .append("text")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("font-size", "10px")
+        .attr("font-weight", "bold")
+        .text("Referred HCOs")
+
+      // Add legend items (limit to 10 to avoid overcrowding)
+      const legendItems = referralData.slice(0, 10)
+
+      legendItems.forEach((item, i) => {
+        const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 15 + 15})`)
+
+        g.append("circle").attr("r", 5).attr("fill", colorScale(item.accountName))
+
+        g.append("text")
+          .attr("x", 10)
+          .attr("y", 0)
+          .attr("dy", ".35em")
+          .attr("font-size", "8px")
+          .text(item.accountName.length > 20 ? item.accountName.substring(0, 20) + "..." : item.accountName)
+      })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -801,42 +795,102 @@ const HCOdeepDive = () => {
 
             <div className="p-4">
               <div className="flex flex-col gap-2 py-2">
-                <div className="text-gray-700 text-[11px] font-medium">Affiliated HCPs</div>
+                <div className="flex justify-between items-center">
+                  <div className="text-gray-700 text-[11px] font-medium">Affiliated HCPs</div>
+
+                  {/* Rows per page selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600 text-[10px]">Rows per page:</span>
+                    <select
+                      className="border rounded px-2 py-1 text-[10px]"
+                      value={rowsPerPage}
+                      onChange={(e) => handleRowsPerPageChange(Number(e.target.value))}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={30}>30</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="rounded-lg overflow-hidden shadow">
-                  <table className="w-full">
-                    <thead className="bg-[#D2D2D2]">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">HCP Name</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">HCP Potential</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">Specialty</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">Patients count</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">#Zolgensma patient</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">#Spinraza patient</th>
-                        <th className="px-4 py-3 text-left text-[11px] font-bold">#Evrysdi patient</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                      {affiliatedHcpsData.length > 0 ? (
-                        affiliatedHcpsData.map((hcp, index) => (
-                          <tr key={index} className="border-t border-gray-200">
-                            <td className="px-4 py-3 text-[10px]">{hcp.hcpName}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.hcpPotential}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.specialty}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.patientCount}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.zolgensmaPatientCount}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.spinrazaPatientCount}</td>
-                            <td className="px-4 py-3 text-[10px]">{hcp.evrysdiPatientCount}</td>
+                  {tableLoading ? (
+                    <div className="flex justify-center items-center h-40 bg-white">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <table className="w-full">
+                        <thead className="bg-[#D2D2D2]">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">HCP Name</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">HCP Potential</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">Specialty</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">Patients count</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">#Zolgensma patient</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">#Spinraza patient</th>
+                            <th className="px-4 py-3 text-left text-[11px] font-bold">#Evrysdi patient</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr className="border-t border-gray-200">
-                          <td colSpan="7" className="px-4 py-3 text-[10px] text-center">
-                            No affiliated HCPs data available
-                          </td>
-                        </tr>
+                        </thead>
+                        <tbody className="bg-white">
+                          {paginatedHcpsData.length > 0 ? (
+                            paginatedHcpsData.map((hcp, index) => (
+                              <tr key={index} className="border-t border-gray-200">
+                                <td className="px-4 py-3 text-[10px]">{hcp.hcpName}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.hcpPotential}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.specialty}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.patientCount}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.zolgensmaPatientCount}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.spinrazaPatientCount}</td>
+                                <td className="px-4 py-3 text-[10px]">{hcp.evrysdiPatientCount}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr className="border-t border-gray-200">
+                              <td colSpan="7" className="px-4 py-3 text-[10px] text-center">
+                                No affiliated HCPs data available
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      {/* Pagination controls */}
+                      {totalPages > 1 && (
+                        <div className="flex justify-center items-center py-2 bg-white border-t border-gray-200">
+                          <button
+                            className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(currentPage - 1)}
+                          >
+                            Previous
+                          </button>
+
+                          <div className="flex mx-2">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                              <button
+                                key={page}
+                                className={`w-6 h-6 mx-1 rounded-full text-[10px] ${
+                                  currentPage === page ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                                }`}
+                                onClick={() => setCurrentPage(page)}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(currentPage + 1)}
+                          >
+                            Next
+                          </button>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 items-center py-2 mt-4">
@@ -875,11 +929,15 @@ const HCOdeepDive = () => {
                 ref={networkRef}
                 className="w-full h-[450px] border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
               >
-                {referralData.length === 0 && (
+                {referralLoading ? (
+                  <div className="flex justify-center items-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : referralData.length === 0 ? (
                   <div className="flex justify-center items-center h-full text-gray-500 text-sm">
                     No referral data available
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Legend for the network graph */}
@@ -889,22 +947,14 @@ const HCOdeepDive = () => {
                   <span className="text-gray-700 text-[11px]">Current HCO</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="bg-[#9370db] rounded-full w-4 h-4"></div>
-                  <span className="text-gray-700 text-[11px]">Account Archetype</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="bg-[#69a7ad] rounded-full w-4 h-4"></div>
-                  <span className="text-gray-700 text-[11px]">HCO Tier</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="bg-[#f28e2b] rounded-full w-4 h-4"></div>
-                  <span className="text-gray-700 text-[11px]">Referred HCO</span>
+                  <span className="text-gray-700 text-[11px]">Referred HCOs (colored by organization)</span>
                 </div>
               </div>
 
               {/* Instructions */}
               <div className="text-gray-500 text-[10px] mt-2 px-2">
                 <p>* Node size indicates number of patients referred</p>
+                <p>* Use mouse wheel to zoom, drag to pan</p>
               </div>
             </div>
           </div>
@@ -915,3 +965,4 @@ const HCOdeepDive = () => {
 }
 
 export default HCOdeepDive
+

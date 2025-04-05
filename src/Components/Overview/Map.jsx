@@ -306,7 +306,7 @@ const USAMap = ({ onStateSelect }) => {
 
       const patientCount = patientStateCounts[stateAbbr] || 0
 
-      setTooltipContent(`${state}\n${viewType.toUpperCase()} `)
+      setTooltipContent(`${state}\n${viewType.toUpperCase()} Count: ${entityCount}\nPatient Count: ${patientCount}`)
     }
   }
 

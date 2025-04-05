@@ -1,3 +1,5 @@
+"use client"
+
 import { ArrowLeft } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
@@ -20,6 +22,8 @@ const HCPdeepDive = () => {
   const [allReferralData, setAllReferralData] = useState([])
   const [activeTab, setActiveTab] = useState("all")
   const [hcpNPI, setHcpNPI] = useState("")
+  // Add a new state for tracking referral loading
+  const [referralLoading, setReferralLoading] = useState(true)
 
   // Ref for the network graph container
   const networkRef = useRef(null)
@@ -52,6 +56,7 @@ const HCPdeepDive = () => {
       if (!hcpNPI) return
 
       try {
+        setReferralLoading(true) // Set loading to true when starting fetch
         const referralUrl = `https://hcp-hco-backend.onrender.com/hcp-360?ref_npi=${hcpNPI}`
         const response = await fetch(referralUrl)
         const data = await response.json()
@@ -59,6 +64,8 @@ const HCPdeepDive = () => {
         processReferralData(data)
       } catch (error) {
         console.error("Error fetching referral data:", error)
+      } finally {
+        setReferralLoading(false) // Set loading to false when fetch completes
       }
     }
 
@@ -204,11 +211,36 @@ const HCPdeepDive = () => {
       const hcpLevel = innerWidth / 3 // Position at 1/3 of the width
       const accountLevel = (innerWidth * 2) / 3 // Position at 2/3 of the width
 
+      // Create a color scale for the HCP-HCO pairs
+      const colorScale = d3
+        .scaleOrdinal()
+        .domain(Object.keys(accountGroups))
+        .range([
+          "#4e79a7",
+          "#f28e2b",
+          "#e15759",
+          "#76b7b2",
+          "#59a14f",
+          "#edc949",
+          "#af7aa1",
+          "#ff9da7",
+          "#9c755f",
+          "#bab0ab",
+          "#d37295",
+          "#a173d1",
+          "#6b6ecf",
+          "#b5b5b5",
+          "#8cd17d",
+        ])
+
       // Add referred HCPs and their affiliated accounts
       const accountNodes = {}
       let hcpIndex = 0
 
       Object.entries(accountGroups).forEach(([accountName, hcps], accountIndex) => {
+        // Get color for this HCP-HCO pair
+        const pairColor = colorScale(accountName)
+
         // Create account node if not exists
         if (!accountNodes[accountName]) {
           const accountNode = {
@@ -219,6 +251,7 @@ const HCPdeepDive = () => {
             x: accountLevel,
             y: 0, // Will be calculated later
             level: 2,
+            color: pairColor, // Assign color to account node
           }
           accountNodes[accountName] = accountNode
           nodes.push(accountNode)
@@ -236,6 +269,7 @@ const HCPdeepDive = () => {
             y: 0, // Will be calculated later
             level: 1,
             accountId: accountNodes[accountName].id,
+            color: pairColor, // Assign same color as account
           }
           nodes.push(hcpNode)
 
@@ -244,6 +278,7 @@ const HCPdeepDive = () => {
             source: rootNode.id,
             target: hcpNode.id,
             value: hcp.patientsReferred,
+            color: pairColor, // Assign color to link
           })
 
           // Link from HCP to affiliated account
@@ -251,6 +286,7 @@ const HCPdeepDive = () => {
             source: hcpNode.id,
             target: accountNodes[accountName].id,
             value: hcp.patientsReferred,
+            color: pairColor, // Assign color to link
           })
 
           hcpIndex++
@@ -304,7 +340,7 @@ const HCPdeepDive = () => {
                    ${target.x},${target.y}`
         })
         .attr("fill", "none")
-        .attr("stroke", "#ccc")
+        .attr("stroke", (d) => d.color || "#ccc") // Use the assigned color
         .attr("stroke-width", (d) => Math.sqrt(d.value) + 1)
         .attr("opacity", 0.7)
 
@@ -327,8 +363,7 @@ const HCPdeepDive = () => {
         })
         .attr("fill", (d) => {
           if (d.type === "current") return "#0b5cab"
-          if (d.type === "referred") return "#69a7ad"
-          return "#9370db"
+          return d.color || "#ccc" // Use the assigned color
         })
         .attr("stroke", "#fff")
         .attr("stroke-width", 1.5)
@@ -377,6 +412,34 @@ const HCPdeepDive = () => {
         .attr("font-size", "10px")
         .attr("fill", "#666")
         .text("Use mouse wheel to zoom, drag to pan")
+
+      // Add legend for HCP-HCO pairs
+      const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right + 20}, 20)`)
+
+      // Add legend title
+      legendGroup
+        .append("text")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("font-size", "12px")
+        .attr("font-weight", "bold")
+        .text("HCP-HCO Pairs")
+
+      // Add legend items (limit to 10 to avoid overcrowding)
+      const legendItems = Object.keys(accountGroups).slice(0, 10)
+
+      legendItems.forEach((accountName, i) => {
+        const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 20 + 20})`)
+
+        g.append("circle").attr("r", 6).attr("fill", colorScale(accountName))
+
+        g.append("text")
+          .attr("x", 15)
+          .attr("y", 0)
+          .attr("dy", ".35em")
+          .attr("font-size", "10px")
+          .text(accountName.length > 25 ? accountName.substring(0, 25) + "..." : accountName)
+      })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -711,11 +774,15 @@ const HCPdeepDive = () => {
                 ref={networkRef}
                 className="w-full h-[550px] border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
               >
-                {referralData.length === 0 && (
+                {referralLoading ? (
+                  <div className="flex justify-center items-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : referralData.length === 0 ? (
                   <div className="flex justify-center items-center h-full text-gray-500 text-sm">
                     No referral data available
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Legend for the network graph */}
@@ -725,18 +792,16 @@ const HCPdeepDive = () => {
                   <span className="text-gray-700 text-[11px]">Current HCP</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="bg-[#69a7ad] rounded-full w-4 h-4"></div>
-                  <span className="text-gray-700 text-[11px]">Referred HCPs</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="bg-[#9370db] rounded-full w-4 h-4"></div>
-                  <span className="text-gray-700 text-[11px]">Affiliated Accounts</span>
+                  <span className="text-gray-700 text-[11px]">
+                    Referred HCPs & Affiliated Accounts (colored by pair)
+                  </span>
                 </div>
               </div>
 
               {/* Instructions */}
               <div className="text-gray-500 text-[10px] mt-2 px-2">
                 <p>* Node size indicates number of patients referred</p>
+                <p>* HCPs and their affiliated HCOs share the same color</p>
                 <p>* Use mouse wheel to zoom, drag to pan</p>
               </div>
             </div>

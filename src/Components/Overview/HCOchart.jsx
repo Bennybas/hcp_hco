@@ -76,14 +76,14 @@ const HCOchart = ({ HCOdata }) => {
           data={segmentData}
           margin={{ top: 10, right: 30, left: -20, bottom: 10 }}
         >
-          <XAxis type="number" tick={{ fontSize: 10 }} />
+          <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis
             dataKey="name"
             type="category"
             tick={{ fontSize: 12 }}
             width={70}
           />
-          <Tooltip />
+          <Tooltip  wrapperStyle={{ fontSize: '10px' }}/>
           <Bar dataKey="value" radius={[0, 10, 10, 0]}>
             {segmentData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />

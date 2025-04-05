@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect, useCallback } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import PrescriberClusterChart from "./PrescriberChart"
@@ -37,13 +39,20 @@ const Overview = () => {
   useEffect(() => {
     if (data.length > 0) {
       if (selectedState) {
-        const stateData = data.filter((item) => item.hcp_state === selectedState)
+        // For charts and tables, we'll still filter the data to show state-specific information
+        const stateData = data.filter(
+          (item) =>
+            item.hcp_state === selectedState ||
+            item.hco_state === selectedState ||
+            item.ref_hcp_state === selectedState ||
+            item.ref_hco_state === selectedState,
+        )
         setFilteredData(stateData)
-        calculateMetrics(stateData)
       } else {
         setFilteredData(data)
-        calculateMetrics(data)
       }
+      // Always calculate metrics with the full dataset and selectedState
+      calculateMetrics(data, selectedState)
     }
   }, [selectedState, data])
 
@@ -56,12 +65,12 @@ const Overview = () => {
         const parsedData = JSON.parse(cachedData)
         setData(parsedData)
         setFilteredData(parsedData)
-        calculateMetrics(parsedData)
+        calculateMetrics(parsedData, null)
         setLoading(false)
         return
       }
 
-      const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-data")
+      const response = await fetch("http://127.0.0.1:5000/fetch-data")
       const jsonData = await response.json()
 
       // Cache the data in sessionStorage
@@ -69,7 +78,7 @@ const Overview = () => {
 
       setData(jsonData)
       setFilteredData(jsonData)
-      calculateMetrics(jsonData)
+      calculateMetrics(jsonData, null)
       setLoading(false)
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -78,35 +87,54 @@ const Overview = () => {
   }
 
   // Memoize the calculateMetrics function to prevent unnecessary recalculations
-  const calculateMetrics = useCallback((data) => {
-    const uniqueRendHCP = new Set(data.map((item) => item.hcp_id).filter((id) => id && id !== "-"))
-    const uniqueRefHCP = new Set(data.map((item) => item.ref_npi).filter((npi) => npi && npi !== "-"))
+  const calculateMetrics = useCallback((data, selectedState) => {
+    // For rendering HCPs, filter by hcp_state if a state is selected
+    const renderingHcps = data.filter((item) => !selectedState || item.hcp_state === selectedState)
+    const uniqueRendHCP = new Set(renderingHcps.map((item) => item.hcp_id).filter((id) => id && id !== "-"))
+
+    // For referring HCPs, filter by ref_hcp_state if a state is selected
+    const referringHcps = data.filter((item) => !selectedState || item.ref_hcp_state === selectedState)
+    const uniqueRefHCP = new Set(referringHcps.map((item) => item.ref_npi).filter((npi) => npi && npi !== "-"))
+
     const uniqueHCPs = new Set([...uniqueRendHCP, ...uniqueRefHCP])
 
-    const uniquePatients = new Set(data.map((item) => item.patient_id))
+    const relevantPatients = data.filter(
+      (item) =>
+        !selectedState ||
+        item.hcp_state === selectedState ||
+        item.ref_hcp_state === selectedState 
+    )
+    const uniquePatients = new Set(relevantPatients.map((item) => item.patient_id).filter((id) => id && id !== "-"))
 
-    const uniqueRendHCO = new Set(data.map((item) => item.hco_mdm).filter((id) => id && id !== "-"))
-    const uniqueRefHCO = new Set(data.map((item) => item.ref_hco_npi_mdm).filter((npi) => npi && npi !== "-"))
+    // For rendering HCOs, filter by hco_state if a state is selected
+    const renderingHcos = data.filter((item) => !selectedState || item.hco_state === selectedState)
+    const uniqueRendHCO = new Set(renderingHcos.map((item) => item.hco_mdm).filter((id) => id && id !== "-"))
 
+    // For referring HCOs, filter by ref_hco_state if a state is selected
+    const referringHcos = data.filter((item) => !selectedState || item.ref_hco_state === selectedState)
+    const uniqueRefHCO = new Set(referringHcos.map((item) => item.ref_hco_npi_mdm).filter((npi) => npi && npi !== "-"))
+
+    // Combine both sets for total unique HCOs
     const uniqueHCOs = new Set([...uniqueRendHCO, ...uniqueRefHCO])
 
-    // Count Zolgemsma prescribers (HCPs where zolg_prescriber='Yes')
-    const zolgemsmaHCPs = new Set(data.filter((item) => item.zolg_prescriber === "Yes").map((item) => item.hcp_id))
-
-    const zolgemsmaHCOs = new Set(data.filter((item) => item.zolg_prescriber === "Yes").map((item) => item.hco_mdm))
+    const zolgensmaHcos = data.filter(
+      (item) => item.zolg_prescriber === "Yes" && (!selectedState || item.hco_state === selectedState),
+    )
+    const zolgemsmaHCOs = new Set(zolgensmaHcos.map((item) => item.hco_mdm))
     const zolgemsmaHCOCount = zolgemsmaHCOs.size
 
     // Calculate patient counts per HCP
     const hcpPatientMap = new Map()
     const hcpIdToNameMap = new Map() // Map to store hcp_id to hcp_name mapping
 
-    data.forEach((item) => {
+    // Process rendering HCPs with state filter
+    renderingHcps.forEach((item) => {
       if (item.hcp_id && item.hcp_id !== "-") {
         if (!hcpPatientMap.has(item.hcp_id)) {
           hcpPatientMap.set(item.hcp_id, new Set())
           hcpIdToNameMap.set(item.hcp_id, item.hcp_name) // Store the mapping
         }
-        if (item.patient_id) {
+        if (item.patient_id && item.patient_id !== "-") {
           hcpPatientMap.get(item.hcp_id).add(item.patient_id)
         }
       }
@@ -116,29 +144,36 @@ const Overview = () => {
     const hcoPatientMap = new Map()
     const hcoIdToNameMap = new Map() // Map to store hco_mdm to hco_mdm_name mapping
 
-    data.forEach((item) => {
+    // Process rendering HCOs with state filter
+    renderingHcos.forEach((item) => {
       if (item.hco_mdm && item.hco_mdm !== "-") {
         if (!hcoPatientMap.has(item.hco_mdm)) {
           hcoPatientMap.set(item.hco_mdm, new Set())
           hcoIdToNameMap.set(item.hco_mdm, item.hco_mdm_name) // Store the mapping
         }
-        if (item.patient_id) {
+        if (item.patient_id && item.patient_id !== "-") {
           hcoPatientMap.get(item.hco_mdm).add(item.patient_id)
         }
       }
     })
 
-    // Get referring HCPs and HCOs
-    const referringHCPs = new Set()
-    const referringHCOs = new Set()
-    data.forEach((item) => {
+    // Get referring HCPs and HCOs with state filters
+    const referringHCPsSet = new Set()
+    const referringHCOsSet = new Set()
+
+    referringHcps.forEach((item) => {
       if (item.ref_npi && item.ref_npi !== "-") {
-        referringHCPs.add(item.hcp_id)
-        referringHCOs.add(item.hco_mdm)
+        referringHCPsSet.add(item.ref_npi)
       }
     })
 
-    // Calculate average patients per HCP (SQL equivalent logic)
+    referringHcos.forEach((item) => {
+      if (item.ref_hco_npi_mdm && item.ref_hco_npi_mdm !== "-") {
+        referringHCOsSet.add(item.ref_hco_npi_mdm)
+      }
+    })
+
+    // Calculate average patients per HCP
     const patientCountsPerHCP = Array.from(hcpPatientMap.values()).map((patientSet) => patientSet.size)
 
     const avgPatientsPerHCP =
@@ -146,6 +181,7 @@ const Overview = () => {
         ? patientCountsPerHCP.reduce((sum, count) => sum + count, 0) / patientCountsPerHCP.length
         : 0
 
+    // Calculate average patients per HCO
     const patientCountsPerHCO = Array.from(hcoPatientMap.values()).map((patientSet) => patientSet.size)
 
     const avgPatientsPerHCO =
@@ -193,9 +229,9 @@ const Overview = () => {
       zolgemsmaEver: zolgemsmaHCOCount,
       avgTreatingHCOs: uniqueRendHCO.size,
       avgPatientsPerHCO: Math.round(avgPatientsPerHCO * 10) / 10,
-      hcosReferringPatients: referringHCOs.size,
+      hcosReferringPatients: referringHCOsSet.size,
       avgPatientsReferredPerHCO:
-        Math.round((referringHCOs.size > 0 ? uniquePatients.size / referringHCOs.size : 0) * 10) / 10,
+        Math.round((referringHCOsSet.size > 0 ? uniquePatients.size / referringHCOsSet.size : 0) * 10) / 10,
       topHCPs,
       topHCOs,
     })
@@ -218,7 +254,6 @@ const Overview = () => {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        
       </div>
     )
   }
@@ -487,4 +522,3 @@ const ABBR_TO_STATE = {
 }
 
 export default Overview
-

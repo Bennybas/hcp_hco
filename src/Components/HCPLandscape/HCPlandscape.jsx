@@ -2,18 +2,22 @@
 
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ArrowBigDown, ChevronDown, MoveUpRight } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
 import { useNavigate } from "react-router-dom"
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
-  const [kpiData, setKpiData] = useState(null)
+  const [data, setData] = useState([])
+  const [kpiData, setKpiData] = useState({
+    renderingHCPs: 0,
+    patientsLast12M: 0,
+    avgPatientsPerHCP: 0,
+    referringHCPs: 0,
+    avgPatientsReferredPerHCP: 0,
+  })
   const [quarterPatData, setQuarterPatData] = useState([])
   const [brandData, setBrandData] = useState([])
-  const [insightsData, setInsightsData] = useState([])
-
-  // Calculate age group and specialty data from insights
   const [hcpsplit_age, setHcpsplitAge] = useState([])
   const [hcpsplit_specialty_data, setHcpsplitSpecialtyData] = useState([])
   const [potential_data, setPotentialData] = useState([])
@@ -22,175 +26,328 @@ const HCPlandscape = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Filters
+  const [filters, setFilters] = useState({
+    year: "2024", // Default year, will be updated with most recent year
+    brand: "All",
+    age: "All",
+  })
+
+  // Filter options
+  const [filterOptions, setFilterOptions] = useState({
+    years: [],
+    brands: ["All"],
+    ages: ["All"],
+  })
+
+  // Dropdown state
+  const [openDropdown, setOpenDropdown] = useState(null)
+
+  // Fetch available years on component mount
   useEffect(() => {
-    // Check if data is already in sessionStorage
-    const cachedData = sessionStorage.getItem("hcplandscapeData")
-
-    if (cachedData) {
-      const parsedData = JSON.parse(cachedData)
-      setKpiData(parsedData.kpiData)
-      setQuarterPatData(parsedData.quarterPatData)
-      setBrandData(parsedData.brandData)
-      setHcpsplitAge(parsedData.hcpsplit_age)
-      setHcpsplitSpecialtyData(parsedData.hcpsplit_specialty_data)
-      setPotentialData(parsedData.potential_data)
-      setAllTableData(parsedData.allTableData)
-      setTableData(parsedData.allTableData.slice(0, rowsPerPage))
-      setIsLoading(false)
-      return
-    }
-
-    // If no cached data, fetch from APIs
-    const fetchAllData = async () => {
+    const fetchAvailableYears = async () => {
       try {
-        // Fetch KPI Card data
-        const kpiResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-kpicard")
-        const kpiData = await kpiResponse.json()
-        setKpiData(kpiData[0])
+        setIsLoading(true)
+        // Fetch data without year filter to get all records
+        const response = await fetch("http://127.0.0.1:5000/fetch-hcplandscape")
+        const jsonData = await response.json()
 
-        // Fetch Quarter Patient data
-        const quarterPatResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-quarterpat")
-        const quarterPatData = await quarterPatResponse.json()
-        const formattedQuarterData = quarterPatData.map((item) => ({
-          quarter: `Q${item.quarter} 24`,
-          value: item.patient_count,
+        // Extract unique years from the data
+        const years = [...new Set(jsonData.map((item) => item.year))]
+          .filter((year) => year && year !== "-")
+          .sort((a, b) => b - a)
+
+        // Update filter options with available years
+        setFilterOptions((prev) => ({
+          ...prev,
+          years: years.length > 0 ? years : ["2024"], 
         }))
-        setQuarterPatData(formattedQuarterData)
 
-        // Fetch Brand data
-        const brandResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-brand")
-        const brandData = await brandResponse.json()
-        const formattedBrandData = brandData.map((item) => ({
-          quarter: `2024 Q${item.quarter}`,
-          Zolgensma: item.ZOLGENSMA,
-          Spinraza: item.SPINRAZA,
-          Evrysdi: item.EVRYSDI,
-        }))
-        setBrandData(formattedBrandData)
+        // Set default year to the most recent year
+        if (years.length > 0) {
+          const mostRecentYear = years[0];
+          setFilters((prev) => ({
+            ...prev,
+            year: mostRecentYear,
+          }))
+        }
 
-        // Fetch Insights data
-        const insightsResponse = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape-insights")
-        const insightsData = await insightsResponse.json()
-        setInsightsData(insightsData)
-
-        // Process data for age group chart
-        const ageGroups = processAgeGroupData(insightsData)
-        setHcpsplitAge(ageGroups)
-
-        // Process data for specialty chart
-        const specialtyData = processSpecialtyData(insightsData)
-        setHcpsplitSpecialtyData(specialtyData)
-
-        // Process data for potential chart
-        const potentialData = processPotentialData(insightsData)
-        setPotentialData(potentialData)
-
-        // Process data for table
-        const tableData = processTableData(insightsData)
-        setAllTableData(tableData)
-        setTableData(tableData.slice(0, rowsPerPage))
-
-        // Cache the data in sessionStorage
-        sessionStorage.setItem(
-          "hcplandscapeData",
-          JSON.stringify({
-            kpiData: kpiData[0],
-            quarterPatData: formattedQuarterData,
-            brandData: formattedBrandData,
-            hcpsplit_age: ageGroups,
-            hcpsplit_specialty_data: specialtyData,
-            potential_data: potentialData,
-            allTableData: tableData,
-          }),
-        )
-
-        setIsLoading(false)
+        // Process initial data if we have it
+        if (jsonData.length > 0) {
+          // Filter data for the selected year
+          const yearData = jsonData.filter((item) => item.year === filters.year)
+          if (yearData.length > 0) {
+            setData(yearData)
+            extractFilterOptions(yearData)
+            processData(yearData)
+          } else {
+            // If no data for selected year, fetch it specifically
+            fetchData()
+          }
+        } else {
+          fetchData()
+        }
       } catch (error) {
-        console.error("Error fetching data:", error)
-        setIsLoading(false)
+        console.error("Error fetching available years:", error)
+        // Fallback to default years if there's an error
+        setFilterOptions((prev) => ({
+          ...prev,
+          years: ["2024", "2025"],
+        }))
+        fetchData()
       }
     }
 
-    fetchAllData()
-  }, [])
+    fetchAvailableYears()
+  }, []) // Empty dependency array ensures this runs only once on component mount
 
-  // Update table data when rowsPerPage changes
+  // Fetch data when filters change
   useEffect(() => {
-    setTableData(allTableData.slice(0, rowsPerPage))
-  }, [rowsPerPage, allTableData])
+    if (filterOptions.years.length > 0) {
+      fetchData()
+    }
+  }, [filters])
 
-  // Function to process age group data
-  const processAgeGroupData = (data) => {
-    // Get unique segments
-    const segments = [...new Set(data.map((item) => item.hcp_segment))]
+  const fetchData = async () => {
+    try {
+      setIsLoading(true)
 
-    // Count occurrences by segment and age group
-    const ageGroupCounts = {}
+      // Build query string based on filters
+      let queryString = `?year=${filters.year}`
+      if (filters.brand !== "All") {
+        queryString += `&brand=${filters.brand}`
+      }
+      if (filters.age !== "All") {
+        queryString += `&age=${filters.age}`
+      }
 
-    segments.forEach((segment) => {
-      ageGroupCounts[segment] = {
-        segment,
-        "<2": 0,
-        "3-17": 0,
-        ">18": 0,
+      const response = await fetch(`http://127.0.0.1:5000/fetch-hcplandscape${queryString}`)
+      const jsonData = await response.json()
+
+      setData(jsonData)
+
+      // Extract filter options from data
+      if (filters.brand === "All" && filters.age === "All") {
+        extractFilterOptions(jsonData)
+      }
+
+      // Process data for different visualizations
+      processData(jsonData)
+
+      setIsLoading(false)
+    } catch (error) {
+      console.error("Error fetching data:", error)
+      setIsLoading(false)
+    }
+  }
+
+  const extractFilterOptions = (data) => {
+    // Extract unique brands and age groups
+    const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
+    const ages = ["All", ...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
+
+    setFilterOptions((prev) => ({
+      ...prev, // Keep the years that were already fetched
+      brands,
+      ages,
+    }))
+  }
+
+  const processData = (data) => {
+    // Calculate KPI metrics
+    calculateKPIMetrics(data)
+
+    // Process quarterly patient data
+    processQuarterlyData(data)
+
+    // Process brand data
+    processBrandData(data)
+
+    // Process age group data
+    processAgeGroupData(data)
+
+    // Process specialty data
+    processSpecialtyData(data)
+
+    // Process potential data
+    processPotentialData(data)
+
+    // Process table data
+    processTableData(data)
+  }
+
+  const calculateKPIMetrics = (data) => {
+    // Count unique rendering HCPs (rend_npi)
+    const renderingHCPs = new Set(data.map((item) => item.rend_npi).filter((npi) => npi && npi !== "-")).size
+
+    // Count unique patients
+    const uniquePatients = new Set(data.map((item) => item.patient_id).filter((id) => id && id !== "-")).size
+
+    // Calculate average patients per HCP
+    const avgPatientsPerHCP = renderingHCPs > 0 ? (uniquePatients / renderingHCPs).toFixed(1) : "0.0"
+
+    // Count unique referring HCPs (ref_npi)
+    const referringHCPs = new Set(data.map((item) => item.ref_npi).filter((npi) => npi && npi !== "-")).size
+
+    // Count referred patients
+    const referredPatients = new Set(
+      data
+        .filter((item) => item.ref_npi && item.ref_npi !== "-")
+        .map((item) => item.patient_id)
+        .filter((id) => id && id !== "-"),
+    ).size
+
+    // Calculate average patients referred per HCP
+    const avgPatientsReferredPerHCP = referringHCPs > 0 ? (referredPatients / referringHCPs).toFixed(1) : "0.0"
+
+    setKpiData({
+      renderingHCPs,
+      patientsLast12M: uniquePatients,
+      avgPatientsPerHCP,
+      referringHCPs,
+      avgPatientsReferredPerHCP,
+    })
+  }
+
+  const processQuarterlyData = (data) => {
+    // Group patients by quarter
+    const quarterCounts = {}
+
+    data.forEach((item) => {
+      if (item.quarter && item.patient_id && item.patient_id !== "-") {
+        const quarter = Number.parseInt(item.quarter)
+        if (!quarterCounts[quarter]) {
+          quarterCounts[quarter] = new Set()
+        }
+        quarterCounts[quarter].add(item.patient_id)
       }
     })
+
+    // Format for chart
+    const formattedQuarterData = Object.entries(quarterCounts)
+      .map(([quarter, patients]) => ({
+        quarter: `Q${quarter} ${filters.year}`,
+        value: patients.size,
+      }))
+      .sort((a, b) => {
+        const quarterA = Number.parseInt(a.quarter.substring(1, 2))
+        const quarterB = Number.parseInt(b.quarter.substring(1, 2))
+        return quarterA - quarterB
+      })
+
+    setQuarterPatData(formattedQuarterData)
+  }
+
+  const processBrandData = (data) => {
+    // Group patients by quarter and drug
+    const brandQuarterCounts = {}
+
+    data.forEach((item) => {
+      if (item.quarter && item.drug_name && item.drug_name !== "-" && item.patient_id && item.patient_id !== "-") {
+        const quarter = Number.parseInt(item.quarter)
+        if (!brandQuarterCounts[quarter]) {
+          brandQuarterCounts[quarter] = {
+            ZOLGENSMA: new Set(),
+            SPINRAZA: new Set(),
+            EVRYSDI: new Set(),
+          }
+        }
+
+        if (brandQuarterCounts[quarter][item.drug_name]) {
+          brandQuarterCounts[quarter][item.drug_name].add(item.patient_id)
+        }
+      }
+    })
+
+    // Format for chart
+    const formattedBrandData = Object.entries(brandQuarterCounts)
+      .map(([quarter, brands]) => ({
+        quarter: `${filters.year} Q${quarter}`,
+        Zolgensma: brands.ZOLGENSMA ? brands.ZOLGENSMA.size : 0,
+        Spinraza: brands.SPINRAZA ? brands.SPINRAZA.size : 0,
+        Evrysdi: brands.EVRYSDI ? brands.EVRYSDI.size : 0,
+      }))
+      .sort((a, b) => {
+        const quarterA = Number.parseInt(a.quarter.substring(a.quarter.length - 1))
+        const quarterB = Number.parseInt(b.quarter.substring(b.quarter.length - 1))
+        return quarterA - quarterB
+      })
+
+    setBrandData(formattedBrandData)
+  }
+
+  const processAgeGroupData = (data) => {
+    // Get unique segments
+    const segments = [...new Set(data.map((item) => item.hcp_segment).filter((segment) => segment && segment !== "-"))]
 
     // Create a map to track unique HCP IDs for each segment and age group
     const segmentAgeHcpMap = new Map()
 
     data.forEach((item) => {
-      if (item.hcp_segment && item.hcp_id && item.age_group) {
+      if (
+        item.hcp_segment &&
+        item.rend_npi &&
+        item.age_group &&
+        item.hcp_segment !== "-" &&
+        item.rend_npi !== "-" &&
+        item.age_group !== "-"
+      ) {
         const key = `${item.hcp_segment}_${item.age_group}`
 
         if (!segmentAgeHcpMap.has(key)) {
           segmentAgeHcpMap.set(key, new Set())
         }
 
-        segmentAgeHcpMap.get(key).add(item.hcp_id)
+        segmentAgeHcpMap.get(key).add(item.rend_npi)
       }
     })
 
-    // Update counts based on unique HCP IDs
-    segments.forEach((segment) => {
-      const under2Key = `${segment}_0 to 2`
-      const age3to17Key = `${segment}_3 to 17`
-      const above18Key = `${segment}_Above 18`
+    // Format for chart
+    const ageGroupData = segments.map((segment) => {
+      const result = { segment }
 
-      ageGroupCounts[segment]["<2"] = segmentAgeHcpMap.has(under2Key) ? segmentAgeHcpMap.get(under2Key).size : 0
-      ageGroupCounts[segment]["3-17"] = segmentAgeHcpMap.has(age3to17Key) ? segmentAgeHcpMap.get(age3to17Key).size : 0
-      ageGroupCounts[segment][">18"] = segmentAgeHcpMap.has(above18Key) ? segmentAgeHcpMap.get(above18Key).size : 0
+      // Map age groups to chart categories
+      const ageMapping = {
+        "0 to 2": "<2",
+        "3 to 17": "3-17",
+        "Above 18": ">18",
+      }
+
+      // Initialize all age groups to 0
+      Object.values(ageMapping).forEach((chartAge) => {
+        result[chartAge] = 0
+      })
+
+      // Fill in counts for each age group
+      Object.entries(ageMapping).forEach(([apiAge, chartAge]) => {
+        const key = `${segment}_${apiAge}`
+        if (segmentAgeHcpMap.has(key)) {
+          result[chartAge] = segmentAgeHcpMap.get(key).size
+        }
+      })
+
+      return result
     })
 
-    return Object.values(ageGroupCounts)
+    setHcpsplitAge(ageGroupData)
   }
 
-  // Function to process specialty data with correct mapping
   const processSpecialtyData = (data) => {
     // Get unique segments
-    const segments = [...new Set(data.map((item) => item.hcp_segment))]
-
-    // Count occurrences by segment and specialty
-    const specialtyCounts = {}
-
-    segments.forEach((segment) => {
-      specialtyCounts[segment] = {
-        segment,
-        PEDIATRIC: 0,
-        "CHILD NEUROLOGY": 0,
-        NEUROLOGY: 0,
-        NEUROMUSCULAR: 0,
-        "NP/PA": 0,
-        RADIOLOGY: 0,
-        "ALL OTHERS": 0,
-      }
-    })
+    const segments = [...new Set(data.map((item) => item.hcp_segment).filter((segment) => segment && segment !== "-"))]
 
     // Create a map to track unique HCP IDs for each segment and specialty
     const segmentSpecialtyHcpMap = new Map()
 
     data.forEach((item) => {
-      if (item.hcp_segment && item.hcp_id && item.final_spec) {
+      if (
+        item.hcp_segment &&
+        item.rend_npi &&
+        item.final_spec &&
+        item.hcp_segment !== "-" &&
+        item.rend_npi !== "-" &&
+        item.final_spec !== "-"
+      ) {
         const specialty = item.final_spec.toUpperCase()
         const key = `${item.hcp_segment}_${specialty}`
 
@@ -198,57 +355,62 @@ const HCPlandscape = () => {
           segmentSpecialtyHcpMap.set(key, new Set())
         }
 
-        segmentSpecialtyHcpMap.get(key).add(item.hcp_id)
+        segmentSpecialtyHcpMap.get(key).add(item.rend_npi)
       }
     })
 
-    // Update counts based on unique HCP IDs
-    segments.forEach((segment) => {
-      Object.keys(specialtyCounts[segment]).forEach((specialty) => {
-        if (specialty !== "segment") {
-          const key = `${segment}_${specialty}`
-          specialtyCounts[segment][specialty] = segmentSpecialtyHcpMap.has(key)
-            ? segmentSpecialtyHcpMap.get(key).size
-            : 0
+    // Format for chart
+    const specialtyData = segments.map((segment) => {
+      const result = { segment }
+
+      // Define specialty categories for the chart
+      const specialtyCategories = {
+        PEDIATRIC: "Pediatric",
+        "CHILD NEUROLOGY": "Child Neurology",
+        NEUROLOGY: "Neurology",
+        NEUROMUSCULAR: "Neuromuscular",
+        "NP/PA": "NP/PA",
+        RADIOLOGY: "Radiology",
+      }
+
+      // Initialize all specialty categories to 0
+      Object.values(specialtyCategories).forEach((chartSpecialty) => {
+        result[chartSpecialty] = 0
+      })
+
+      // Add "All Others" category
+      result["All Others"] = 0
+
+      // Fill in counts for each specialty
+      Object.entries(specialtyCategories).forEach(([apiSpecialty, chartSpecialty]) => {
+        const key = `${segment}_${apiSpecialty}`
+        if (segmentSpecialtyHcpMap.has(key)) {
+          result[chartSpecialty] = segmentSpecialtyHcpMap.get(key).size
         }
       })
 
-      // Handle "ALL OTHERS" specialty
-      data.forEach((item) => {
-        if (item.hcp_segment === segment) {
-          const specialty = item.final_spec.toUpperCase()
-          if (!specialtyCounts[segment][specialty] && specialty !== "ALL OTHERS") {
-            const key = `${segment}_${specialty}`
-            if (segmentSpecialtyHcpMap.has(key)) {
-              specialtyCounts[segment]["ALL OTHERS"] += segmentSpecialtyHcpMap.get(key).size
-            }
+      segmentSpecialtyHcpMap.forEach((hcps, key) => {
+        if (key.startsWith(`${segment}_`)) {
+          const specialty = key.substring(segment.length + 1)
+          if (!Object.keys(specialtyCategories).includes(specialty)) {
+            result["All Others"] += hcps.size
           }
         }
       })
+
+      return result
     })
 
-    // Convert to the format expected by the chart
-    return Object.values(specialtyCounts).map((item) => ({
-      segment: item.segment,
-      PCP: 0, // Keep for backward compatibility
-      Pediatric: item["PEDIATRIC"],
-      "All Others": item["ALL OTHERS"],
-      "Child Neurology": item["CHILD NEUROLOGY"],
-      Neuromuscular: item["NEUROMUSCULAR"],
-      "NP/PA": item["NP/PA"],
-      Neurology: item["NEUROLOGY"],
-      Radiology: item["RADIOLOGY"],
-    }))
+    setHcpsplitSpecialtyData(specialtyData)
   }
 
-  // Function to process potential data
   const processPotentialData = (data) => {
     // Create a Map to track unique HCP IDs for each segment
     const segmentHcpMap = new Map()
 
     // Process each record
     data.forEach((item) => {
-      if (item.hcp_segment && item.hcp_id) {
+      if (item.hcp_segment && item.rend_npi && item.hcp_segment !== "-" && item.rend_npi !== "-") {
         // Normalize segment name (uppercase for consistency)
         const segment = item.hcp_segment.toUpperCase()
 
@@ -258,7 +420,7 @@ const HCPlandscape = () => {
         }
 
         // Add HCP ID to the set for this segment
-        segmentHcpMap.get(segment).add(item.hcp_id)
+        segmentHcpMap.get(segment).add(item.rend_npi)
       }
     })
 
@@ -297,32 +459,31 @@ const HCPlandscape = () => {
       return aOrder - bOrder
     })
 
-    return result
+    setPotentialData(result)
   }
 
-  // Function to process table data
   const processTableData = (data) => {
     // Get unique HCPs and count their patients
     const uniqueHcps = {}
     const hcpPatientCounts = {}
 
     data.forEach((item) => {
-      if (item.hcp_id) {
+      if (item.rend_npi && item.rend_npi !== "-") {
         // Initialize HCP entry if it doesn't exist
-        if (!uniqueHcps[item.hcp_id]) {
-          uniqueHcps[item.hcp_id] = {
-            "HCP ID": item.hcp_id,
+        if (!uniqueHcps[item.rend_npi]) {
+          uniqueHcps[item.rend_npi] = {
+            "HCP ID": item.rend_npi,
             "HCP Name": item.hcp_name,
             Specialty: item.final_spec,
             "Affiliated Accounts": item.hco_mdm_name,
             "HCP Segment": item.hcp_segment,
           }
-          hcpPatientCounts[item.hcp_id] = new Set()
+          hcpPatientCounts[item.rend_npi] = new Set()
         }
 
         // Add patient to count if it exists
-        if (item.patient_id) {
-          hcpPatientCounts[item.hcp_id].add(item.patient_id)
+        if (item.patient_id && item.patient_id !== "-") {
+          hcpPatientCounts[item.rend_npi].add(item.patient_id)
         }
       }
     })
@@ -333,21 +494,50 @@ const HCPlandscape = () => {
     })
 
     // Convert to array and add rank
-    return Object.values(uniqueHcps)
+    const tableData = Object.values(uniqueHcps)
       .sort((a, b) => b["Patient Count"] - a["Patient Count"])
       .map((hcp, index) => ({
         Rank: String(index + 1).padStart(2, "0"),
         ...hcp,
       }))
+
+    setAllTableData(tableData)
+    setTableData(tableData.slice(0, rowsPerPage))
+  }
+
+  // Handle filter changes
+  const handleFilterChange = (filterName, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [filterName]: value,
+    }))
+
+    // Close dropdown after selection
+    setOpenDropdown(null)
+  }
+
+  // Toggle dropdown
+  const toggleDropdown = (dropdown) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown)
   }
 
   // Handle row count change
   const handleRowCountChange = (count) => {
     setRowsPerPage(count)
+    setTableData(allTableData.slice(0, count))
   }
 
   // Calculate max value for potential data
   const maxValue = potential_data.length > 0 ? Math.max(...potential_data.map((item) => item.value), 0) : 0
+
+  // Navigate to HCP details
+  const getHCPDetails = (hcpName) => {
+    navigate("/hcp", { state: { hcp_name: hcpName } })
+  }
+
+  useEffect(() => {
+    setTableData(allTableData.slice(0, rowsPerPage))
+  }, [rowsPerPage, allTableData])
 
   if (isLoading) {
     return (
@@ -357,28 +547,101 @@ const HCPlandscape = () => {
     )
   }
 
-  const getHCPDetails = (hcpName) => {
-    navigate("/hcp", { state: { hcp_name: hcpName } })
-  }
-
   return (
     <div className="flex flex-col gap-4 w-full p-2">
-      <div className="flex items-center py-1 px-2 rounded-lg bg-white w-16 justify-between">
-         
-          <span className="text-[12px] text-gray-600">Year</span>
-          <ChevronDown className="w-4 h-4"/>
+      {/* Filters */}
+      <div className="flex gap-4 items-center">
+        {/* Year Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[100px]"
+            onClick={() => toggleDropdown("year")}
+          >
+            <span className="text-[12px] text-gray-600">Year: {filters.year}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "year" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.years.map((year) => (
+                <div
+                  key={year}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.year === year ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("year", year)}
+                >
+                  {year}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Brand Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            onClick={() => toggleDropdown("brand")}
+          >
+            <span className="text-[12px] text-gray-600">Brand: {filters.brand}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "brand" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.brands.map((brand) => (
+                <div
+                  key={brand}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.brand === brand ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("brand", brand)}
+                >
+                  {brand}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Age Filter */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            onClick={() => toggleDropdown("age")}
+          >
+            <span className="text-[12px] text-gray-600">Age: {filters.age}</span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "age" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full">
+              {filterOptions.ages.map((age) => (
+                <div
+                  key={age}
+                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                    filters.age === age ? "bg-blue-50 text-blue-600" : ""
+                  }`}
+                  onClick={() => handleFilterChange("age", age)}
+                >
+                  {age}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* KPI Cards */}
       <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Rendering HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData ? kpiData.hcp_id : "0"}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCPs}</span>
         </div>
-        <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex flex-col justify-between h-full">
             <div className="flex gap-2 items-center">
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
@@ -388,46 +651,43 @@ const HCPlandscape = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-gray-700 text-[16px] font-[500]">{kpiData ? kpiData.pt_12_mth : "0"}</span>
-              {/* <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
-              <span className="text-green-500 text-xs">5.2%</span>
-              <span className="text-gray-500 text-xs">vs last month</span> */}
+              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Treated per HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">
-            {kpiData ? kpiData.patient_per_hcp.toFixed(1) : "0"}
-          </span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avgPatientsPerHCP}</span>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">#Referring HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData ? kpiData.ref_npi : "0"}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCPs}</span>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x  border-gray-300 w-[20%] h-20 p-2 justify-between">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex gap-2 items-center">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Referred per HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">2.1</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avgPatientsReferredPerHCP}</span>
         </div>
       </div>
+
+      {/* Charts - First Row */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-56 p-2">
           <span className="text-gray-500 text-[11px] font-[500] pb-4">#QoQ SMA Treated Patients (12 months)</span>
@@ -474,6 +734,7 @@ const HCPlandscape = () => {
         </div>
       </div>
 
+      {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-56 p-2">
           <span className="text-gray-500 text-[11px] font-[500] pb-4">HCP segment by SMA patient Potential</span>
@@ -585,6 +846,7 @@ const HCPlandscape = () => {
         </div>
       </div>
 
+      {/* HCPs Table */}
       <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
         <div className="flex justify-between items-center p-2">
           <div className="flex gap-2 items-center">
@@ -625,8 +887,10 @@ const HCPlandscape = () => {
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
                   <td className="p-2">{hcp.Rank}</td>
-                  <td onClick={() => getHCPDetails(hcp["HCP Name"])}className="p-2 cursor-pointer">{hcp["HCP ID"]}</td>
-                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">{hcp["HCP Name"]}</td>
+                  <td className="p-2">{hcp["HCP ID"]}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
+                    {hcp["HCP Name"]}
+                  </td>
                   <td className="p-2">{hcp.Specialty}</td>
                   <td className="p-2">{hcp["HCP Segment"]}</td>
                   <td className="p-2 text-right">{hcp["Patient Count"]}</td>
@@ -642,4 +906,3 @@ const HCPlandscape = () => {
 }
 
 export default HCPlandscape
-
