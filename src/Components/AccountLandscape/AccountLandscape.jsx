@@ -70,13 +70,13 @@ const AccountLandscape = () => {
       try {
         setLoading(true)
         // Fetch data without year filter to get all records
-        const response = await fetch("http://127.0.0.1:5000/fetch-hcolandscape")
+        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape")
         const jsonData = await response.json()
 
         // Extract unique years from the data
         const years = [...new Set(jsonData.map((item) => item.year))]
           .filter((year) => year && year !== "-")
-          .sort((a, b) => a - b) // Sort years in ascending order
+          .sort((a, b) => b - a) // Sort years in ascending order
 
         // Update filter options with available years
         setFilterOptions((prev) => ({
@@ -86,7 +86,7 @@ const AccountLandscape = () => {
 
         // Set default year to the most recent year
         if (years.length > 0) {
-          const mostRecentYear = years[years.length - 1]
+          const mostRecentYear = years[0];
           setFilters((prev) => ({
             ...prev,
             year: mostRecentYear,
@@ -268,7 +268,14 @@ const AccountLandscape = () => {
     })
 
     // Convert to array format for pie chart
-    const colors = ["#00599D", "#6A99B5", "#7DFFA8", "#F0C3F7", "#C8E3F5"]
+    const colors = [
+      "#00599D", // Keep this as the primary blue
+      "#4A7D99", // Darker than #6A99B5
+      "#52C97C", // Darker than #7DFFA8
+      "#C087CB", // Darker than #F0C3F7
+      "#91BDD8", // Darker than #C8E3F5
+    ];
+    
     const result = Array.from(groupingMap.entries())
       .map(([name, patients], index) => ({
         name,

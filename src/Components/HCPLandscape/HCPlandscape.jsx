@@ -49,7 +49,7 @@ const HCPlandscape = () => {
       try {
         setIsLoading(true)
         // Fetch data without year filter to get all records
-        const response = await fetch("http://127.0.0.1:5000/fetch-hcplandscape")
+        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape")
         const jsonData = await response.json()
 
         // Extract unique years from the data
@@ -121,7 +121,7 @@ const HCPlandscape = () => {
         queryString += `&age=${filters.age}`
       }
 
-      const response = await fetch(`http://127.0.0.1:5000/fetch-hcplandscape${queryString}`)
+      const response = await fetch(`https://hcp-hco-backend.onrender.com/fetch-hcplandscape${queryString}`)
       const jsonData = await response.json()
 
       setData(jsonData)

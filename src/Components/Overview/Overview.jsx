@@ -70,7 +70,7 @@ const Overview = () => {
         return
       }
 
-      const response = await fetch("http://127.0.0.1:5000/fetch-data")
+      const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-data")
       const jsonData = await response.json()
 
       // Cache the data in sessionStorage
@@ -343,7 +343,7 @@ const Overview = () => {
                     <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
                       {hcp.name}
                     </td>
-                    <td className="p-2">{hcp.id}</td>
+                    <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">{hcp.id}</td>
                     <td className="p-2 text-right">{hcp.volume}</td>
                   </tr>
                 ))}
@@ -453,7 +453,7 @@ const Overview = () => {
                     <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">
                       {hco.name}
                     </td>
-                    <td className="p-2">{hco.id}</td>
+                    <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">{hco.id}</td>
                     <td className="p-2 text-right">{hco.volume}</td>
                   </tr>
                 ))}

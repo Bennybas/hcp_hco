@@ -65,7 +65,7 @@ const HCOdeepDive = () => {
         processHCOData(data)
 
         // Fetch referral data separately
-        const referralUrl = `http://127.0.0.1:5000/hco-360?ref_hco_npi_mdm=${encodeURIComponent(hcoMdm)}`
+        const referralUrl = `https://hcp-hco-backend.onrender.com/hco-360?ref_hco_npi_mdm=${encodeURIComponent(hcoMdm)}`
         const referralResponse = await fetch(referralUrl)
         const referralData = await referralResponse.json()
 
