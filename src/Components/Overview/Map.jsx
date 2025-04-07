@@ -1039,7 +1039,7 @@ const USAMap = ({ onStateSelect }) => {
       </div>
 
       {/* ZIP code data */}
-      <div className="flex flex-col gap-2 w-full mt-2">
+      {/* <div className="flex flex-col gap-2 w-full mt-2">
         {selectedState && (
           <>
             <div className="flex justify-between items-center">
@@ -1076,7 +1076,7 @@ const USAMap = ({ onStateSelect }) => {
         )}
 
         {!selectedState && <div className="text-gray-500 text-sm">Select a state to view ZIP code data</div>}
-      </div>
+      </div> */}
     </div>
   )
 }
