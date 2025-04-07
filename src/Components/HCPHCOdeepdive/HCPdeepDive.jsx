@@ -34,7 +34,7 @@ const HCPdeepDive = () => {
     const fetchHCPData = async () => {
       try {
         setLoading(true)
-        const hcpurl = `http://127.0.0.1:5000/hcp-360?hcp_name=${encodeURIComponent(hcpName)}`
+        const hcpurl = `https://hcp-hco-backend.onrender.com/hcp-360?hcp_name=${encodeURIComponent(hcpName)}`
         const response = await fetch(hcpurl)
         const data = await response.json()
 

@@ -50,7 +50,7 @@ const HCPlandscape = () => {
       try {
         setIsLoading(true)
         // Fetch all data without year filter
-        const response = await fetch("http://127.0.0.1:5000/fetch-hcplandscape")
+        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape")
         const jsonData = await response.json()
 
         // Extract unique years from the data, filtering out 2016 and 2025
