@@ -1,188 +1,885 @@
-import React from "react";
-import { ComposableMap, Geographies, Geography } from "react-simple-maps";
-import { ChevronDown, Search } from "lucide-react";
+"use client"
 
-const healthcareData = {
-  "01": { abbr: "AL", patients: 127, hcps: 45, adoptionRate: 68 },
-  "02": { abbr: "AK", patients: 25, hcps: 12, adoptionRate: 55 },
-  "04": { abbr: "AZ", patients: 192, hcps: 83, adoptionRate: 72 },
-  "05": { abbr: "AR", patients: 95, hcps: 37, adoptionRate: 65 },
-  "06": { abbr: "CA", patients: 873, hcps: 264, adoptionRate: 82 },
-  "08": { abbr: "CO", patients: 177, hcps: 67, adoptionRate: 75 },
-  "09": { abbr: "CT", patients: 128, hcps: 51, adoptionRate: 73 },
-  "10": { abbr: "DE", patients: 31, hcps: 16, adoptionRate: 69 },
-  "11": { abbr: "DC", patients: 24, hcps: 15, adoptionRate: 71 },
-  "12": { abbr: "FL", patients: 640, hcps: 221, adoptionRate: 78 },
-  "13": { abbr: "GA", patients: 274, hcps: 95, adoptionRate: 74 },
-  "15": { abbr: "HI", patients: 54, hcps: 21, adoptionRate: 62 },
-  "16": { abbr: "ID", patients: 58, hcps: 28, adoptionRate: 67 },
-  "17": { abbr: "IL", patients: 391, hcps: 136, adoptionRate: 76 },
-  "18": { abbr: "IN", patients: 247, hcps: 83, adoptionRate: 71 },
-  "19": { abbr: "IA", patients: 143, hcps: 56, adoptionRate: 69 },
-  "20": { abbr: "KS", patients: 129, hcps: 47, adoptionRate: 66 },
-  "21": { abbr: "KY", patients: 167, hcps: 62, adoptionRate: 68 },
-  "22": { abbr: "LA", patients: 186, hcps: 73, adoptionRate: 64 },
-  "23": { abbr: "ME", patients: 62, hcps: 24, adoptionRate: 70 },
-  "24": { abbr: "MD", patients: 245, hcps: 92, adoptionRate: 74 },
-  "25": { abbr: "MA", patients: 293, hcps: 104, adoptionRate: 80 },
-  "26": { abbr: "MI", patients: 373, hcps: 135, adoptionRate: 75 },
-  "27": { abbr: "MN", patients: 206, hcps: 78, adoptionRate: 76 },
-  "28": { abbr: "MS", patients: 104, hcps: 38, adoptionRate: 63 },
-  "29": { abbr: "MO", patients: 234, hcps: 88, adoptionRate: 70 },
-  "30": { abbr: "MT", patients: 48, hcps: 19, adoptionRate: 61 },
-  "31": { abbr: "NE", patients: 83, hcps: 34, adoptionRate: 67 },
-  "32": { abbr: "NV", patients: 153, hcps: 58, adoptionRate: 71 },
-  "33": { abbr: "NH", patients: 57, hcps: 23, adoptionRate: 74 },
-  "34": { abbr: "NJ", patients: 382, hcps: 138, adoptionRate: 77 },
-  "35": { abbr: "NM", patients: 88, hcps: 32, adoptionRate: 68 },
-  "36": { abbr: "NY", patients: 672, hcps: 241, adoptionRate: 81 },
-  "37": { abbr: "NC", patients: 358, hcps: 129, adoptionRate: 76 },
-  "38": { abbr: "ND", patients: 37, hcps: 15, adoptionRate: 65 },
-  "39": { abbr: "OH", patients: 421, hcps: 148, adoptionRate: 73 },
-  "40": { abbr: "OK", patients: 163, hcps: 63, adoptionRate: 69 },
-  "41": { abbr: "OR", patients: 147, hcps: 59, adoptionRate: 72 },
-  "42": { abbr: "PA", patients: 523, hcps: 187, adoptionRate: 78 },
-  "44": { abbr: "RI", patients: 43, hcps: 18, adoptionRate: 74 },
-  "45": { abbr: "SC", patients: 174, hcps: 64, adoptionRate: 70 },
-  "46": { abbr: "SD", patients: 43, hcps: 17, adoptionRate: 66 },
-  "47": { abbr: "TN", patients: 238, hcps: 89, adoptionRate: 72 },
-  "48": { abbr: "TX", patients: 812, hcps: 283, adoptionRate: 79 },
-  "49": { abbr: "UT", patients: 101, hcps: 40, adoptionRate: 71 },
-  "50": { abbr: "VT", patients: 26, hcps: 12, adoptionRate: 68 },
-  "51": { abbr: "VA", patients: 316, hcps: 115, adoptionRate: 74 },
-  "53": { abbr: "WA", patients: 231, hcps: 89, adoptionRate: 75 },
-  "54": { abbr: "WV", patients: 58, hcps: 22, adoptionRate: 64 },
-  "55": { abbr: "WI", patients: 198, hcps: 76, adoptionRate: 72 },
-  "56": { abbr: "WY", patients: 29, hcps: 13, adoptionRate: 63 }
-};
+import React, { useState, useEffect, useRef, useMemo } from "react"
+import { ChevronDown, Search, Loader } from "lucide-react"
+import { MapContainer, TileLayer, Marker, Tooltip, Polyline, useMap } from "react-leaflet"
+import L from "leaflet"
+import "leaflet/dist/leaflet.css"
+import JSONData from "../../data/refer.json"
 
-const referringHCPData = [
-  { name: "Talan Mango", count: 116 },
-  { name: "Cheyenne Rhiel", count: 104 },
-  { name: "Cristofer Septimus", count: 96 },
-  { name: "Zain Franci", count: 82 },
-  { name: "Ashlynn Geidt", count: 78 },
-  { name: "Lindsey Siphron", count: 76 },
-  { name: "Ryan Mango", count: 72 },
-  { name: "Livia Baptista", count: 64 },
-  { name: "Craig Mango", count: 60 },
-  { name: "Desirae Bergson", count: 56 },
-  { name: "Carter Workman", count: 52 },
-  { name: "Rayna Schleifer", count: 48 }
-];
+// Custom icons for the map
+const createMapIcon = (iconUrl, iconSize) => {
+  return L.icon({
+    iconUrl,
+    iconSize: [iconSize, iconSize],
+    iconAnchor: [iconSize / 2, iconSize],
+    popupAnchor: [0, -iconSize],
+  })
+}
 
-const renderingHCPData = [
-  { name: "Cheyenne Rhiel", count: 104 },
-  { name: "Cristofer Septimus", count: 96 },
-  { name: "Zain Franci", count: 82 },
-  { name: "Ashlynn Geidt", count: 78 },
-  { name: "Lindsey Siphron", count: 76 },
-  { name: "Ryan Mango", count: 72 },
-  { name: "Livia Baptista", count: 64 },
-  { name: "Craig Mango", count: 60 },
-  { name: "Desirae Bergson", count: 56 },
-  { name: "Carter Workman", count: 52 },
-  { name: "Rayna Schleifer", count: 48 }
-];
+// Location marker icon for rendering HCPs/HCOs
+const locationIcon = createMapIcon("/location-marker.svg", 30)
 
-const filters = [
-  { name: "HCP Type" },
-  { name: "HCP Tier" },
-  { name: "HCP Speciality" }
-];
+// Stethoscope icon for referring HCPs/HCOs
+const stethoscopeIcon = createMapIcon("/stethoscope.svg", 30)
 
-const ReferOut = () => {
+// Map bounds controller component
+const MapBoundsController = ({ bounds }) => {
+  const map = useMap()
+
+  useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds)
+    }
+  }, [bounds, map])
+
+  return null
+}
+
+// Map markers component for better performance
+const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, selectedEntity }) => {
+  return (
+    <>
+      {/* Render referring markers */}
+      {referringMarkers.map((marker, index) => (
+        <Marker key={`ref-${index}`} position={marker.position} icon={stethoscopeIcon}>
+          <Tooltip permanent={selectedEntity.referring === marker.name}>
+            <div className="text-xs">
+              <strong>{marker.name}</strong>
+              <div>Patients: {marker.count}</div>
+            </div>
+          </Tooltip>
+        </Marker>
+      ))}
+
+      {/* Render rendering markers */}
+      {renderingMarkers.map((marker, index) => (
+        <Marker key={`rend-${index}`} position={marker.position} icon={locationIcon}>
+          <Tooltip permanent={selectedEntity.rendering === marker.name}>
+            <div className="text-xs">
+              <strong>{marker.name}</strong>
+              <div>Patients: {marker.count}</div>
+            </div>
+          </Tooltip>
+        </Marker>
+      ))}
+
+      {/* Render connections */}
+      {mapConnections.map((connection) => (
+        <React.Fragment key={connection.id}>
+          <Polyline
+            positions={[connection.refPosition, connection.rendPosition]}
+            pathOptions={{
+              color: "blue",
+              weight: 2,
+              dashArray: "5, 5",
+              opacity: 0.7,
+            }}
+          />
+          {/* Patient count label in the middle of the line */}
+          <Marker
+            position={[
+              (connection.refPosition[0] + connection.rendPosition[0]) / 2,
+              (connection.refPosition[1] + connection.rendPosition[1]) / 2,
+            ]}
+            icon={L.divIcon({
+              html: `<div class="bg-white px-2 py-1 rounded-full border border-blue-500 text-xs font-bold">${connection.patientCount}</div>`,
+              className: "patient-count-label",
+              iconSize: [40, 20],
+              iconAnchor: [20, 10],
+            })}
+          />
+        </React.Fragment>
+      ))}
+    </>
+  )
+}
+
+const ReferOut = ({ referType = "HCP" }) => {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filterLoading, setFilterLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [filteredData, setFilteredData] = useState([])
+  const [mapReady, setMapReady] = useState(false)
+
+  // State for filters - different filters based on referType
+  const [filters, setFilters] = useState({
+    // HCP filters
+    hcpType: "All",
+    hcpSpecialty: "All",
+    // HCO filters
+    hcoTier: "All",
+    hcoArchetype: "All",
+  })
+
+  // State for filter options
+  const [filterOptions, setFilterOptions] = useState({
+    // HCP filter options
+    hcpTypes: ["All"],
+    hcpSpecialties: ["All"],
+    // HCO filter options
+    hcoTiers: ["All"],
+    hcoArchetypes: ["All"],
+  })
+
+  // State for dropdown visibility
+  const [openDropdown, setOpenDropdown] = useState(null)
+
+  // State for search terms
+  const [searchTerms, setSearchTerms] = useState({
+    referring: "",
+    rendering: "",
+  })
+
+  // State for selected entities
+  const [selectedEntity, setSelectedEntity] = useState({
+    referring: null,
+    rendering: null,
+  })
+
+  // Refs for map
+  const mapRef = useRef(null)
+
+  // Clean data by removing NaN, "-", etc.
+  const cleanData = (rawData) => {
+    return rawData.map((item) => {
+      const cleanedItem = {}
+
+      // Process each property
+      Object.entries(item).forEach(([key, value]) => {
+        if (value === "-" || value === "" || value === null || (typeof value === "number" && isNaN(value))) {
+          cleanedItem[key] = null
+        } else {
+          cleanedItem[key] = value
+        }
+      })
+
+      return cleanedItem
+    })
+  }
+
+  // Load data from local JSON file
+  useEffect(() => {
+    try {
+      setLoading(true)
+      setSelectedEntity({ referring: null, rendering: null })
+      setSearchTerms({ referring: "", rendering: "" })
+
+      // Clean the data from the imported JSON
+      const cleanedData = cleanData(JSONData)
+      setData(cleanedData)
+
+      // Extract filter options based on referType
+      if (referType === "HCP") {
+        const hcpTypes = ["All", ...new Set(cleanedData.map((item) => item.hcp_segment).filter(Boolean))]
+        const hcpSpecialties = ["All", ...new Set(cleanedData.map((item) => item.final_spec).filter(Boolean))]
+
+        setFilterOptions((prev) => ({
+          ...prev,
+          hcpTypes,
+          hcpSpecialties,
+        }))
+
+        // Reset HCP-specific filters
+        setFilters((prev) => ({
+          ...prev,
+          hcpType: "All",
+          hcpSpecialty: "All",
+        }))
+      } else {
+        // HCO filters
+        const hcoTiers = ["All", ...new Set(cleanedData.map((item) => item.hco_mdm_tier).filter(Boolean))]
+        const hcoArchetypes = ["All", ...new Set(cleanedData.map((item) => item.hco_grouping).filter(Boolean))]
+
+        setFilterOptions((prev) => ({
+          ...prev,
+          hcoTiers,
+          hcoArchetypes,
+        }))
+
+        // Reset HCO-specific filters
+        setFilters((prev) => ({
+          ...prev,
+          hcoTier: "All",
+          hcoArchetype: "All",
+        }))
+      }
+
+      // Set filtered data initially to all data
+      setFilteredData(cleanedData)
+
+      setLoading(false)
+    } catch (err) {
+      console.error("Error processing data:", err)
+      setError("Failed to process data. Please check the JSON format.")
+      setLoading(false)
+    }
+  }, [referType]) // Re-run when referType changes
+
+  // Apply filters to data - using useEffect with a debounce for better performance
+  useEffect(() => {
+    if (data.length === 0) return
+
+    setFilterLoading(true)
+
+    // Use setTimeout to prevent UI blocking
+    const timeoutId = setTimeout(() => {
+      try {
+        let filtered = [...data]
+
+        if (referType === "HCP") {
+          // Apply HCP type filter
+          if (filters.hcpType !== "All") {
+            filtered = filtered.filter((item) => item.hcp_segment === filters.hcpType)
+          }
+
+          // Apply HCP specialty filter
+          if (filters.hcpSpecialty !== "All") {
+            filtered = filtered.filter((item) => item.final_spec === filters.hcpSpecialty)
+          }
+        } else {
+          // Apply HCO tier filter
+          if (filters.hcoTier !== "All") {
+            filtered = filtered.filter((item) => item.hco_mdm_tier === filters.hcoTier)
+          }
+
+          // Apply HCO archetype filter
+          if (filters.hcoArchetype !== "All") {
+            filtered = filtered.filter((item) => item.hco_grouping === filters.hcoArchetype)
+          }
+        }
+
+        // Apply selected entity filters
+        if (selectedEntity.referring) {
+          if (referType === "HCP") {
+            filtered = filtered.filter((item) => item.ref_name === selectedEntity.referring)
+          } else {
+            filtered = filtered.filter((item) => item.ref_organization_mdm_name === selectedEntity.referring)
+          }
+        }
+
+        if (selectedEntity.rendering) {
+          if (referType === "HCP") {
+            filtered = filtered.filter((item) => item.hcp_name === selectedEntity.rendering)
+          } else {
+            filtered = filtered.filter((item) => item.hco_mdm_name === selectedEntity.rendering)
+          }
+        }
+
+        setFilteredData(filtered)
+      } catch (err) {
+        console.error("Error filtering data:", err)
+      } finally {
+        setFilterLoading(false)
+      }
+    }, 50) // Shorter timeout for better responsiveness
+
+    return () => clearTimeout(timeoutId)
+  }, [data, filters, selectedEntity, referType])
+
+  // Handle filter changes
+  const handleFilterChange = (filterName, value) => {
+    // Show loading immediately
+    setFilterLoading(true)
+
+    // Use requestAnimationFrame to ensure the UI updates before processing
+    requestAnimationFrame(() => {
+      setFilters((prev) => ({
+        ...prev,
+        [filterName]: value,
+      }))
+
+      // Close dropdown after selection
+      setOpenDropdown(null)
+    })
+  }
+
+  // Toggle dropdown
+  const toggleDropdown = (dropdown) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown)
+  }
+
+  // Handle search term changes
+  const handleSearchChange = (side, value) => {
+    setSearchTerms((prev) => ({
+      ...prev,
+      [side]: value,
+    }))
+  }
+
+  // Handle entity selection
+  const handleEntitySelect = (side, entity) => {
+    // Show loading immediately
+    setFilterLoading(true)
+
+    // Use requestAnimationFrame to ensure the UI updates before processing
+    requestAnimationFrame(() => {
+      setSelectedEntity((prev) => ({
+        ...prev,
+        [side]: prev[side] === entity ? null : entity,
+      }))
+    })
+  }
+
+  // Memoized referring entities with counts
+  const referringEntities = useMemo(() => {
+    const entityMap = new Map()
+
+    filteredData.forEach((item) => {
+      const entityName = referType === "HCP" ? item.ref_name : item.ref_organization_mdm_name
+
+      // Skip if entity name is null or ref_npi is null
+      if (!entityName || !item.ref_npi) return
+
+      if (!entityMap.has(entityName)) {
+        entityMap.set(entityName, new Set())
+      }
+
+      // Add patient to the set if it exists
+      if (item.patient_id) {
+        entityMap.get(entityName).add(item.patient_id)
+      }
+    })
+
+    // Convert to array and sort by count
+    return Array.from(entityMap.entries())
+      .map(([name, patients]) => ({
+        name,
+        count: patients.size,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .filter((entity) => {
+        // Apply search filter
+        if (!searchTerms.referring) return true
+        return entity.name.toLowerCase().includes(searchTerms.referring.toLowerCase())
+      })
+  }, [filteredData, referType, searchTerms.referring])
+
+  // Memoized rendering entities with counts
+  const renderingEntities = useMemo(() => {
+    const entityMap = new Map()
+
+    filteredData.forEach((item) => {
+      const entityName = referType === "HCP" ? item.hcp_name : item.hco_mdm_name
+
+      // Skip if entity name is null
+      if (!entityName) return
+
+      // Only count if ref_npi exists (patient was referred)
+      if (!item.ref_npi) return
+
+      if (!entityMap.has(entityName)) {
+        entityMap.set(entityName, new Set())
+      }
+
+      // Add patient to the set if it exists
+      if (item.patient_id) {
+        entityMap.get(entityName).add(item.patient_id)
+      }
+    })
+
+    // Convert to array and sort by count
+    return Array.from(entityMap.entries())
+      .map(([name, patients]) => ({
+        name,
+        count: patients.size,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .filter((entity) => {
+        // Apply search filter
+        if (!searchTerms.rendering) return true
+        return entity.name.toLowerCase().includes(searchTerms.rendering.toLowerCase())
+      })
+  }, [filteredData, referType, searchTerms.rendering])
+
+  // Memoized map connections
+  const mapConnections = useMemo(() => {
+    const connections = []
+    const processedPairs = new Set()
+
+    filteredData.forEach((item) => {
+      // Skip if missing required data
+      if (!item.ref_npi || !item.rend_hco_lat || !item.rend_hco_long || !item.ref_hco_lat || !item.ref_hco_long) {
+        return
+      }
+
+      const refName = referType === "HCP" ? item.ref_name : item.ref_organization_mdm_name
+      const rendName = referType === "HCP" ? item.hcp_name : item.hco_mdm_name
+
+      // Skip if names are missing
+      if (!refName || !rendName) return
+
+      // Create a unique key for this connection
+      const connectionKey = `${refName}-${rendName}`
+
+      // Skip if we've already processed this pair
+      if (processedPairs.has(connectionKey)) return
+      processedPairs.add(connectionKey)
+
+      // Count patients for this connection
+      const patientCount = filteredData.filter((d) => {
+        const dRefName = referType === "HCP" ? d.ref_name : d.ref_organization_mdm_name
+        const dRendName = referType === "HCP" ? d.hcp_name : d.hco_mdm_name
+        return dRefName === refName && dRendName === rendName && d.patient_id
+      }).length
+
+      connections.push({
+        id: connectionKey,
+        refName,
+        rendName,
+        refPosition: [item.ref_hco_lat, item.ref_hco_long],
+        rendPosition: [item.rend_hco_lat, item.rend_hco_long],
+        patientCount,
+      })
+    })
+
+    return connections
+  }, [filteredData, referType])
+
+  // Memoized referring markers
+  const referringMarkers = useMemo(() => {
+    const markers = new Map()
+
+    filteredData.forEach((item) => {
+      // Skip if missing required data
+      if (!item.ref_npi || !item.ref_hco_lat || !item.ref_hco_long) return
+
+      const entityName = referType === "HCP" ? item.ref_name : item.ref_organization_mdm_name
+
+      // Skip if entity name is null
+      if (!entityName) return
+
+      if (!markers.has(entityName)) {
+        markers.set(entityName, {
+          name: entityName,
+          position: [item.ref_hco_lat, item.ref_hco_long],
+          patients: new Set(),
+        })
+      }
+
+      // Add patient to the set if it exists
+      if (item.patient_id) {
+        markers.get(entityName).patients.add(item.patient_id)
+      }
+    })
+
+    // Convert to array and add count
+    return Array.from(markers.values()).map((marker) => ({
+      ...marker,
+      count: marker.patients.size,
+    }))
+  }, [filteredData, referType])
+
+  // Memoized rendering markers
+  const renderingMarkers = useMemo(() => {
+    const markers = new Map()
+
+    filteredData.forEach((item) => {
+      // Skip if missing required data
+      if (!item.rend_hco_lat || !item.rend_hco_long) return
+
+      const entityName = referType === "HCP" ? item.hcp_name : item.hco_mdm_name
+
+      // Skip if entity name is null
+      if (!entityName) return
+
+      if (!markers.has(entityName)) {
+        markers.set(entityName, {
+          name: entityName,
+          position: [item.rend_hco_lat, item.rend_hco_long],
+          patients: new Set(),
+        })
+      }
+
+      // Add patient to the set if it exists and was referred
+      if (item.patient_id && item.ref_npi) {
+        markers.get(entityName).patients.add(item.patient_id)
+      }
+    })
+
+    // Convert to array and add count
+    return Array.from(markers.values()).map((marker) => ({
+      ...marker,
+      count: marker.patients.size,
+    }))
+  }, [filteredData, referType])
+
+  // Memoized map bounds
+  const mapBounds = useMemo(() => {
+    const allMarkers = [...referringMarkers, ...renderingMarkers]
+
+    if (allMarkers.length === 0) {
+      // Default to US bounds if no markers
+      return [
+        [24.396308, -125.0],
+        [49.384358, -66.93457],
+      ]
+    }
+
+    const lats = allMarkers.map((marker) => marker.position[0])
+    const lngs = allMarkers.map((marker) => marker.position[1])
+
+    const minLat = Math.min(...lats)
+    const maxLat = Math.max(...lats)
+    const minLng = Math.min(...lngs)
+    const maxLng = Math.max(...lngs)
+
+    // Add padding
+    const padding = 0.5
+    return [
+      [minLat - padding, minLng - padding],
+      [maxLat + padding, maxLng + padding],
+    ]
+  }, [referringMarkers, renderingMarkers])
+
+  // Reset all filters and selections
+  const resetFilters = () => {
+    // Show loading immediately
+    setFilterLoading(true)
+
+    // Use requestAnimationFrame to ensure the UI updates before processing
+    requestAnimationFrame(() => {
+      if (referType === "HCP") {
+        setFilters((prev) => ({
+          ...prev,
+          hcpType: "All",
+          hcpSpecialty: "All",
+        }))
+      } else {
+        setFilters((prev) => ({
+          ...prev,
+          hcoTier: "All",
+          hcoArchetype: "All",
+        }))
+      }
+
+      setSelectedEntity({
+        referring: null,
+        rendering: null,
+      })
+
+      setSearchTerms({
+        referring: "",
+        rendering: "",
+      })
+    })
+  }
+
+  // Handle map ready state
+  const handleMapReady = () => {
+    setMapReady(true)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-2"></div>
+          <span className="text-gray-600">Loading {referType}...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-red-500">{error}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4">
-      <div className="flex gap-2">
-        {filters.map((filter, i) => (
-          <div key={i} className="flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x border-gray-300">
-            <span className="text-[11px] text-gray-600">{filter.name}</span>
-            <ChevronDown className="w-4 h-4 text-gray-500" />
-          </div>
-        ))}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          {referType === "HCP" ? (
+            // HCP Filters
+            <>
+              {/* HCP Type Filter */}
+              <div className="relative">
+                <div
+                  className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                    filters.hcpType !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                  } cursor-pointer transition-colors duration-150`}
+                  onClick={() => toggleDropdown("hcpType")}
+                >
+                  <span
+                    className={`text-[11px] ${filters.hcpType !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                  >
+                    HCP Type: {filters.hcpType}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+                </div>
+                {openDropdown === "hcpType" && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                    {filterOptions.hcpTypes.map((type, i) => (
+                      <div
+                        key={i}
+                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                          filters.hcpType === type ? "bg-blue-50 text-blue-600" : ""
+                        }`}
+                        onClick={() => handleFilterChange("hcpType", type)}
+                      >
+                        {type}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* HCP Specialty Filter */}
+              <div className="relative">
+                <div
+                  className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                    filters.hcpSpecialty !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                  } cursor-pointer transition-colors duration-150`}
+                  onClick={() => toggleDropdown("hcpSpecialty")}
+                >
+                  <span
+                    className={`text-[11px] ${filters.hcpSpecialty !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                  >
+                    HCP Specialty: {filters.hcpSpecialty}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 ${filters.hcpSpecialty !== "All" ? "text-blue-500" : "text-gray-500"}`}
+                  />
+                </div>
+                {openDropdown === "hcpSpecialty" && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                    {filterOptions.hcpSpecialties.map((specialty, i) => (
+                      <div
+                        key={i}
+                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                          filters.hcpSpecialty === specialty ? "bg-blue-50 text-blue-600" : ""
+                        }`}
+                        onClick={() => handleFilterChange("hcpSpecialty", specialty)}
+                      >
+                        {specialty}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            // HCO Filters
+            <>
+              {/* HCO Tier Filter */}
+              <div className="relative">
+                <div
+                  className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                    filters.hcoTier !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                  } cursor-pointer transition-colors duration-150`}
+                  onClick={() => toggleDropdown("hcoTier")}
+                >
+                  <span
+                    className={`text-[11px] ${filters.hcoTier !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                  >
+                    HCO Tier: {filters.hcoTier}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 ${filters.hcoTier !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+                </div>
+                {openDropdown === "hcoTier" && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                    {filterOptions.hcoTiers.map((tier, i) => (
+                      <div
+                        key={i}
+                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                          filters.hcoTier === tier ? "bg-blue-50 text-blue-600" : ""
+                        }`}
+                        onClick={() => handleFilterChange("hcoTier", tier)}
+                      >
+                        {tier}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* HCO Archetype Filter */}
+              <div className="relative">
+                <div
+                  className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                    filters.hcoArchetype !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                  } cursor-pointer transition-colors duration-150`}
+                  onClick={() => toggleDropdown("hcoArchetype")}
+                >
+                  <span
+                    className={`text-[11px] ${filters.hcoArchetype !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                  >
+                    Account Archetype: {filters.hcoArchetype}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 ${filters.hcoArchetype !== "All" ? "text-blue-500" : "text-gray-500"}`}
+                  />
+                </div>
+                {openDropdown === "hcoArchetype" && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                    {filterOptions.hcoArchetypes.map((archetype, i) => (
+                      <div
+                        key={i}
+                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                          filters.hcoArchetype === archetype ? "bg-blue-50 text-blue-600" : ""
+                        }`}
+                        onClick={() => handleFilterChange("hcoArchetype", archetype)}
+                      >
+                        {archetype}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Reset button */}
+        <button
+          className="text-[11px] text-blue-600 bg-blue-50 px-3 py-1 rounded-md hover:bg-blue-100"
+          onClick={resetFilters}
+        >
+          Reset Filters
+        </button>
       </div>
 
       <div className="flex gap-4 w-full">
-        {/* Left Side */}
-        <div className="flex flex-col bg-white rounded-xl w-[20%] h-screen border-b border-x border-gray-300">
+        {/* Left Side - Referring Entities */}
+        <div className="flex flex-col bg-white rounded-xl w-[20%] h-[calc(100vh-120px)] border-b border-x border-gray-300">
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by HCP, Name...etc"
+                placeholder={`Search by ${referType}...`}
                 className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-gray-300 focus:outline-none"
+                value={searchTerms.referring}
+                onChange={(e) => handleSearchChange("referring", e.target.value)}
               />
             </div>
           </div>
           <div className="px-3 py-2 border-b border-gray-200">
             <div className="flex justify-between">
-              <span className="text-[11px] text-gray-600 font-medium">Referring HCP</span>
+              <span className="text-[11px] text-gray-600 font-medium">Referring {referType}</span>
               <span className="text-[11px] text-gray-600 font-medium">Patients Referred Out</span>
             </div>
           </div>
-          <div className="overflow-y-auto">
-            {referringHCPData.map((item, index) => (
-              <div key={index} className="flex justify-between px-3 py-2 border-b border-gray-100 hover:bg-gray-50">
-                <span className="text-[10px] text-gray-800">{item.name}</span>
-                <span className="text-[10px] text-gray-800">{item.count}</span>
+          <div className="overflow-y-auto relative">
+            {filterLoading && searchTerms.referring && (
+              <div className="absolute inset-0 bg-white bg-opacity-50 z-10 flex items-center justify-center">
+                <Loader className="animate-spin h-6 w-6 text-blue-500" />
               </div>
-            ))}
+            )}
+            {referringEntities.length > 0 ? (
+              referringEntities.map((entity, index) => (
+                <div
+                  key={index}
+                  className={`flex justify-between px-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors duration-150 ${
+                    selectedEntity.referring === entity.name ? "bg-blue-50 font-medium" : ""
+                  }`}
+                  onClick={() => handleEntitySelect("referring", entity.name)}
+                >
+                  <span className="text-[10px] text-gray-800">{entity.name}</span>
+                  <span className="text-[10px] text-gray-800">{entity.count}</span>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center text-[11px] text-gray-500">No referring {referType}s found</div>
+            )}
           </div>
         </div>
 
         {/* Center Map */}
-        <div className="flex flex-col w-[60%] h-screen">
-          <ComposableMap projection="geoAlbersUsa">
-            <Geographies geography="https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json">
-              {({ geographies }) =>
-                geographies.map((geo) => {
-                  const stateData = healthcareData[geo.id] || {};
-                  return (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill={stateData.adoptionRate > 70 ? "#4f93c0" : "#a6cee3"}
-                      stroke="#FFF"
-                    />
-                  );
-                })
-              }
-            </Geographies>
-          </ComposableMap>
+        <div className="flex flex-col w-[60%] h-[calc(100vh-120px)] bg-white rounded-xl border-b border-x border-gray-300 relative">
+          {filterLoading && (
+            <div className="absolute inset-0 bg-white bg-opacity-70 z-50 flex items-center justify-center transition-opacity duration-150 ease-in-out">
+              <div className="flex flex-col items-center bg-white p-4 rounded-lg shadow-md">
+                <Loader className="animate-spin h-8 w-8 text-blue-500 mb-2" />
+                <span className="text-sm text-gray-600 font-medium">Processing data...</span>
+              </div>
+            </div>
+          )}
+
+          {filteredData.length > 0 ? (
+            <MapContainer
+              bounds={mapBounds}
+              style={{ height: "100%", width: "100%" }}
+              zoom={4}
+              ref={mapRef}
+              whenReady={handleMapReady}
+              zoomControl={false}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              <MapBoundsController bounds={mapBounds} />
+
+              {mapReady && !filterLoading && (
+                <MapMarkers
+                  referringMarkers={referringMarkers}
+                  renderingMarkers={renderingMarkers}
+                  mapConnections={mapConnections}
+                  selectedEntity={selectedEntity}
+                />
+              )}
+            </MapContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              No data available to display on map
+            </div>
+          )}
         </div>
 
-        {/* Right Side */}
-        <div className="flex flex-col bg-white rounded-xl w-[20%] h-screen border-b border-x border-gray-300">
+        {/* Right Side - Rendering Entities */}
+        <div className="flex flex-col bg-white rounded-xl w-[20%] h-[calc(100vh-120px)] border-b border-x border-gray-300">
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by HCP, Name...etc"
+                placeholder={`Search by ${referType}...`}
                 className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-gray-300 focus:outline-none"
+                value={searchTerms.rendering}
+                onChange={(e) => handleSearchChange("rendering", e.target.value)}
               />
             </div>
           </div>
           <div className="px-3 py-2 border-b border-gray-200">
             <div className="flex justify-between">
-              <span className="text-[11px] text-gray-600 font-medium">Rendering HCP</span>
+              <span className="text-[11px] text-gray-600 font-medium">Rendering {referType}</span>
               <span className="text-[11px] text-gray-600 font-medium">Patients Rendered</span>
             </div>
           </div>
-          <div className="overflow-y-auto">
-            {renderingHCPData.map((item, index) => (
-              <div key={index} className="flex justify-between px-3 py-2 border-b border-gray-100 hover:bg-gray-50">
-                <span className="text-[10px] text-gray-800">{item.name}</span>
-                <span className="text-[10px] text-gray-800">{item.count}</span>
+          <div className="overflow-y-auto relative">
+            {filterLoading && searchTerms.rendering && (
+              <div className="absolute inset-0 bg-white bg-opacity-50 z-10 flex items-center justify-center">
+                <Loader className="animate-spin h-6 w-6 text-blue-500" />
               </div>
-            ))}
+            )}
+            {renderingEntities.length > 0 ? (
+              renderingEntities.map((entity, index) => (
+                <div
+                  key={index}
+                  className={`flex justify-between px-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors duration-150 ${
+                    selectedEntity.rendering === entity.name ? "bg-blue-50 font-medium" : ""
+                  }`}
+                  onClick={() => handleEntitySelect("rendering", entity.name)}
+                >
+                  <span className="text-[10px] text-gray-800">{entity.name}</span>
+                  <span className="text-[10px] text-gray-800">{entity.count}</span>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center text-[11px] text-gray-500">No rendering {referType}s found</div>
+            )}
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ReferOut;
+export default ReferOut

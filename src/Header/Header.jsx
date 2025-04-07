@@ -2,10 +2,8 @@ import React, { useState, useEffect } from "react";
 import { FcBusinessman } from "react-icons/fc";
 import { CiViewTable } from "react-icons/ci";
 import { TbZoomPan } from "react-icons/tb";
-import { HiOutlineChartBarSquare } from "react-icons/hi2";
 import { FaUserDoctor } from "react-icons/fa6";
 import { GrUserAdmin } from "react-icons/gr";
-import { LuMonitorCog } from "react-icons/lu";
 import Overview from "../Components/Overview/Overview";
 import HCPlandscape from "../Components/HCPLandscape/HCPlandscape";
 import AccountLandscape from "../Components/AccountLandscape/AccountLandscape";
@@ -68,7 +66,7 @@ const Header = () => {
       case "account":
         return <AccountLandscape />
       case "refer":
-        return <ReferOut />
+        return <ReferOut referType={activeReferType} />
     }
   };
 
