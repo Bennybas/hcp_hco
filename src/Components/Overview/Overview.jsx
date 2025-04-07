@@ -6,6 +6,7 @@ import PrescriberClusterChart from "./PrescriberChart"
 import HCOchart from "./HCOchart"
 import { useNavigate } from "react-router-dom"
 import USAMap from "./Map"
+import USAMap2 from "./Map2"
 
 const Overview = () => {
   const navigate = useNavigate()
@@ -285,7 +286,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">Average Rendering HCPs</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Treating HCPs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCPs}</span>
           </div>
@@ -294,7 +295,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">Avg.Patients per HCPs</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Avg.Treated Patients per HCPs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCP}</span>
           </div>
@@ -303,7 +304,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">HCPs Referring Patients</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Referring HCPs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcpsReferringPatients}</span>
           </div>
@@ -386,7 +387,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Treating HCOs</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Prescribing HCOs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.zolgemsmaEver}</span>
           </div>
@@ -395,7 +396,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">Average Treating HCOs</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Treating HCOs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCOs}</span>
           </div>
@@ -404,7 +405,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">Avg.Patients per HCOs</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Avg.Treated Patients per HCOs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCO}</span>
           </div>
@@ -413,7 +414,7 @@ const Overview = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">HCOs Referring Patients</span>
+              <span className="text-gray-500 text-[11px] font-[500]">Referring HCOs</span>
             </div>
             <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcosReferringPatients}</span>
           </div>

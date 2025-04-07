@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown } from "lucide-react"
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 
 const HCPlandscape = () => {
@@ -16,7 +16,6 @@ const HCPlandscape = () => {
     referringHCPs: 0,
     avgPatientsReferredPerHCP: 0,
   })
-  const [quarterPatData, setQuarterPatData] = useState([])
   const [brandData, setBrandData] = useState([])
   const [hcpsplit_age, setHcpsplitAge] = useState([])
   const [hcpsplit_specialty_data, setHcpsplitSpecialtyData] = useState([])
@@ -25,17 +24,19 @@ const HCPlandscape = () => {
   const [allTableData, setAllTableData] = useState([])
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   // Filters
   const [filters, setFilters] = useState({
-    year: "2024", // Default year, will be updated with most recent year
+    year: "All", // Default to All years
     brand: "All",
     age: "All",
   })
 
   // Filter options
   const [filterOptions, setFilterOptions] = useState({
-    years: [],
+    years: ["All"],
     brands: ["All"],
     ages: ["All"],
   })
@@ -43,102 +44,69 @@ const HCPlandscape = () => {
   // Dropdown state
   const [openDropdown, setOpenDropdown] = useState(null)
 
-  // Fetch available years on component mount
+  // Fetch data on component mount
   useEffect(() => {
-    const fetchAvailableYears = async () => {
+    const fetchAllData = async () => {
       try {
         setIsLoading(true)
-        // Fetch data without year filter to get all records
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape")
+        // Fetch all data without year filter
+        const response = await fetch("http://127.0.0.1:5000/fetch-hcplandscape")
         const jsonData = await response.json()
 
-        // Extract unique years from the data
+        // Extract unique years from the data, filtering out 2016 and 2025
         const years = [...new Set(jsonData.map((item) => item.year))]
-          .filter((year) => year && year !== "-")
-          .sort((a, b) => b - a)
+          .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
+          .sort((a, b) => b - a) // Sort years in descending order
 
         // Update filter options with available years
         setFilterOptions((prev) => ({
           ...prev,
-          years: years.length > 0 ? years : ["2024"], 
+          years: ["All", ...years],
         }))
 
-        // Set default year to the most recent year
-        if (years.length > 0) {
-          const mostRecentYear = years[0];
-          setFilters((prev) => ({
-            ...prev,
-            year: mostRecentYear,
-          }))
-        }
+        // Set the data
+        setData(jsonData)
 
-        // Process initial data if we have it
-        if (jsonData.length > 0) {
-          // Filter data for the selected year
-          const yearData = jsonData.filter((item) => item.year === filters.year)
-          if (yearData.length > 0) {
-            setData(yearData)
-            extractFilterOptions(yearData)
-            processData(yearData)
-          } else {
-            // If no data for selected year, fetch it specifically
-            fetchData()
-          }
-        } else {
-          fetchData()
-        }
+        // Extract other filter options
+        extractFilterOptions(jsonData)
+
+        // Process data for visualizations
+        processData(jsonData)
+
+        setIsLoading(false)
       } catch (error) {
-        console.error("Error fetching available years:", error)
-        // Fallback to default years if there's an error
-        setFilterOptions((prev) => ({
-          ...prev,
-          years: ["2024", "2025"],
-        }))
-        fetchData()
+        console.error("Error fetching data:", error)
+        setIsLoading(false)
       }
     }
 
-    fetchAvailableYears()
+    fetchAllData()
   }, []) // Empty dependency array ensures this runs only once on component mount
 
   // Fetch data when filters change
   useEffect(() => {
-    if (filterOptions.years.length > 0) {
-      fetchData()
+    if (data.length > 0) {
+      // Filter data based on current filters
+      const filteredData = getFilteredData()
+
+      // Process filtered data
+      processData(filteredData)
     }
   }, [filters])
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true)
+  const getFilteredData = () => {
+    return data.filter((item) => {
+      // Year filter
+      if (filters.year !== "All" && item.year !== filters.year) return false
 
-      // Build query string based on filters
-      let queryString = `?year=${filters.year}`
-      if (filters.brand !== "All") {
-        queryString += `&brand=${filters.brand}`
-      }
-      if (filters.age !== "All") {
-        queryString += `&age=${filters.age}`
-      }
+      // Brand filter
+      if (filters.brand !== "All" && item.drug_name !== filters.brand) return false
 
-      const response = await fetch(`https://hcp-hco-backend.onrender.com/fetch-hcplandscape${queryString}`)
-      const jsonData = await response.json()
+      // Age filter
+      if (filters.age !== "All" && item.age_group !== filters.age) return false
 
-      setData(jsonData)
-
-      // Extract filter options from data
-      if (filters.brand === "All" && filters.age === "All") {
-        extractFilterOptions(jsonData)
-      }
-
-      // Process data for different visualizations
-      processData(jsonData)
-
-      setIsLoading(false)
-    } catch (error) {
-      console.error("Error fetching data:", error)
-      setIsLoading(false)
-    }
+      return true
+    })
   }
 
   const extractFilterOptions = (data) => {
@@ -146,8 +114,14 @@ const HCPlandscape = () => {
     const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
     const ages = ["All", ...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
 
+    // Get years but filter out 2016 and 2025
+    const years = [...new Set(data.map((item) => item.year))]
+      .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
+      .sort((a, b) => b - a) // Sort years in descending order
+
     setFilterOptions((prev) => ({
-      ...prev, // Keep the years that were already fetched
+      ...prev,
+      years: ["All", ...years],
       brands,
       ages,
     }))
@@ -157,11 +131,8 @@ const HCPlandscape = () => {
     // Calculate KPI metrics
     calculateKPIMetrics(data)
 
-    // Process quarterly patient data
-    processQuarterlyData(data)
-
-    // Process brand data
-    processBrandData(data)
+    // Process brand data by year and quarter
+    processAllYearsBrandData(data)
 
     // Process age group data
     processAgeGroupData(data)
@@ -209,69 +180,83 @@ const HCPlandscape = () => {
     })
   }
 
-  const processQuarterlyData = (data) => {
-    // Group patients by quarter
-    const quarterCounts = {}
+  const processAllYearsBrandData = (data) => {
+    // Group patients by year, quarter and drug
+    const yearQuarterDrugCounts = {}
 
     data.forEach((item) => {
-      if (item.quarter && item.patient_id && item.patient_id !== "-") {
+      if (
+        item.year &&
+        item.quarter &&
+        item.drug_name &&
+        item.drug_name !== "-" &&
+        item.patient_id &&
+        item.patient_id !== "-"
+      ) {
+        // Skip 2016 and 2025 data
+        if (item.year === "2016" || item.year === "2025") return
+
+        const year = item.year
         const quarter = Number.parseInt(item.quarter)
-        if (!quarterCounts[quarter]) {
-          quarterCounts[quarter] = new Set()
-        }
-        quarterCounts[quarter].add(item.patient_id)
-      }
-    })
+        const key = `${year}-Q${quarter}`
 
-    // Format for chart
-    const formattedQuarterData = Object.entries(quarterCounts)
-      .map(([quarter, patients]) => ({
-        quarter: `Q${quarter} ${filters.year}`,
-        value: patients.size,
-      }))
-      .sort((a, b) => {
-        const quarterA = Number.parseInt(a.quarter.substring(1, 2))
-        const quarterB = Number.parseInt(b.quarter.substring(1, 2))
-        return quarterA - quarterB
-      })
-
-    setQuarterPatData(formattedQuarterData)
-  }
-
-  const processBrandData = (data) => {
-    // Group patients by quarter and drug
-    const brandQuarterCounts = {}
-
-    data.forEach((item) => {
-      if (item.quarter && item.drug_name && item.drug_name !== "-" && item.patient_id && item.patient_id !== "-") {
-        const quarter = Number.parseInt(item.quarter)
-        if (!brandQuarterCounts[quarter]) {
-          brandQuarterCounts[quarter] = {
+        if (!yearQuarterDrugCounts[key]) {
+          yearQuarterDrugCounts[key] = {
+            year,
+            quarter,
+            displayQuarter: `Q${quarter}`,
+            displayYear: year,
             ZOLGENSMA: new Set(),
             SPINRAZA: new Set(),
             EVRYSDI: new Set(),
           }
         }
 
-        if (brandQuarterCounts[quarter][item.drug_name]) {
-          brandQuarterCounts[quarter][item.drug_name].add(item.patient_id)
+        if (yearQuarterDrugCounts[key][item.drug_name]) {
+          yearQuarterDrugCounts[key][item.drug_name].add(item.patient_id)
         }
       }
     })
 
-    // Format for chart
-    const formattedBrandData = Object.entries(brandQuarterCounts)
-      .map(([quarter, brands]) => ({
-        quarter: `${filters.year} Q${quarter}`,
-        Zolgensma: brands.ZOLGENSMA ? brands.ZOLGENSMA.size : 0,
-        Spinraza: brands.SPINRAZA ? brands.SPINRAZA.size : 0,
-        Evrysdi: brands.EVRYSDI ? brands.EVRYSDI.size : 0,
-      }))
-      .sort((a, b) => {
-        const quarterA = Number.parseInt(a.quarter.substring(a.quarter.length - 1))
-        const quarterB = Number.parseInt(b.quarter.substring(b.quarter.length - 1))
-        return quarterA - quarterB
+    // Format for chart - group by year first
+    const yearGroups = {}
+
+    Object.entries(yearQuarterDrugCounts).forEach(([key, data]) => {
+      const year = data.year
+      if (!yearGroups[year]) {
+        yearGroups[year] = []
+      }
+
+      yearGroups[year].push({
+        quarter: data.displayQuarter,
+        year: data.displayYear,
+        quarterNum: data.quarter,
+        sortKey: `${data.year}-${data.quarter.toString().padStart(2, "0")}`,
+        Zolgensma: data.ZOLGENSMA ? data.ZOLGENSMA.size : 0,
+        Spinraza: data.SPINRAZA ? data.SPINRAZA.size : 0,
+        Evrysdi: data.EVRYSDI ? data.EVRYSDI.size : 0,
       })
+    })
+
+    // Sort quarters within each year and flatten
+    const formattedBrandData = []
+
+    // Sort years chronologically
+    const sortedYears = Object.keys(yearGroups).sort()
+
+    sortedYears.forEach((year) => {
+      // Sort quarters within the year
+      const yearData = yearGroups[year].sort((a, b) => a.quarterNum - b.quarterNum)
+
+      // Add a yearLabel property to the first quarter of each year
+      yearData.forEach((item, index) => {
+        item.yearLabel = index === 0 ? year : ""
+        // Add total for each quarter
+        item.total = item.Zolgensma + item.Spinraza + item.Evrysdi
+      })
+
+      formattedBrandData.push(...yearData)
+    })
 
     setBrandData(formattedBrandData)
   }
@@ -325,6 +310,9 @@ const HCPlandscape = () => {
           result[chartAge] = segmentAgeHcpMap.get(key).size
         }
       })
+
+      // Calculate total for each segment
+      result.total = result["<2"] + result["3-17"] + result[">18"]
 
       return result
     })
@@ -389,6 +377,7 @@ const HCPlandscape = () => {
         }
       })
 
+      // Count "All Others" - specialties not in our predefined categories
       segmentSpecialtyHcpMap.forEach((hcps, key) => {
         if (key.startsWith(`${segment}_`)) {
           const specialty = key.substring(segment.length + 1)
@@ -397,6 +386,15 @@ const HCPlandscape = () => {
           }
         }
       })
+
+      // Calculate total for each segment
+      result.total =
+        result["Pediatric"] +
+        result["Child Neurology"] +
+        result["Neurology"] +
+        result["Neuromuscular"] +
+        result["NP/PA"] +
+        result["All Others"]
 
       return result
     })
@@ -501,8 +499,22 @@ const HCPlandscape = () => {
         ...hcp,
       }))
 
+    // Store all table data
     setAllTableData(tableData)
-    setTableData(tableData.slice(0, rowsPerPage))
+
+    // Calculate total pages
+    const totalPagesCount = Math.ceil(tableData.length / rowsPerPage)
+    setTotalPages(totalPagesCount)
+
+    // Update paginated data
+    updatePaginatedData(tableData, currentPage, rowsPerPage)
+  }
+
+  // Update paginated data based on current page and rows per page
+  const updatePaginatedData = (data, page, rowsPerPageCount) => {
+    const startIndex = (page - 1) * rowsPerPageCount
+    const endIndex = startIndex + rowsPerPageCount
+    setTableData(data.slice(startIndex, endIndex))
   }
 
   // Handle filter changes
@@ -511,6 +523,9 @@ const HCPlandscape = () => {
       ...prev,
       [filterName]: value,
     }))
+
+    // Reset to first page when filters change
+    setCurrentPage(1)
 
     // Close dropdown after selection
     setOpenDropdown(null)
@@ -524,7 +539,20 @@ const HCPlandscape = () => {
   // Handle row count change
   const handleRowCountChange = (count) => {
     setRowsPerPage(count)
-    setTableData(allTableData.slice(0, count))
+    setCurrentPage(1) // Reset to first page
+
+    // Update total pages
+    const totalPagesCount = Math.ceil(allTableData.length / count)
+    setTotalPages(totalPagesCount)
+
+    // Update paginated data
+    updatePaginatedData(allTableData, 1, count)
+  }
+
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+    updatePaginatedData(allTableData, page, rowsPerPage)
   }
 
   // Calculate max value for potential data
@@ -535,9 +563,20 @@ const HCPlandscape = () => {
     navigate("/hcp", { state: { hcp_name: hcpName } })
   }
 
-  useEffect(() => {
-    setTableData(allTableData.slice(0, rowsPerPage))
-  }, [rowsPerPage, allTableData])
+  // Generate pagination range with visible pages
+  const getPaginationRange = () => {
+    const visiblePages = 5 // Show 5 pages at a time
+
+    let startPage = Math.max(1, currentPage - Math.floor(visiblePages / 2))
+    let endPage = startPage + visiblePages - 1
+
+    if (endPage > totalPages) {
+      endPage = totalPages
+      startPage = Math.max(1, endPage - visiblePages + 1)
+    }
+
+    return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i)
+  }
 
   if (isLoading) {
     return (
@@ -687,51 +726,48 @@ const HCPlandscape = () => {
         </div>
       </div>
 
-      {/* Charts - First Row */}
-      <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-56 p-2">
-          <span className="text-gray-500 text-[11px] font-[500] pb-4">#QoQ SMA Treated Patients (12 months)</span>
-          <ResponsiveContainer width="100%" height="90%">
-            <LineChart data={quarterPatData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="quarter" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#2962FF" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-56 p-2">
-          <div className="flex gap-2 items-center justify-between w-full pb-4">
-            <span className="text-gray-500 text-[11px] font-[500]">#QoQ Patients By Brand</span>
-            <div className="flex gap-2 items-center">
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#004567] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Zolgensma</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Spinraza</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#5aa687] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Evrysdi</span>
-              </div>
+      {/* QoQ Patients By Brand Chart - Full Width */}
+      <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-56 p-2">
+        <div className="flex gap-2 items-center justify-between w-full pb-4">
+          <span className="text-gray-500 text-[11px] font-[500]">#QoQ Patients By Brand</span>
+          <div className="flex gap-2 items-center">
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#004567] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Zolgensma</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Spinraza</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#5aa687] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Evrysdi</span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height="90%" style={{ marginLeft: -10, marginBottom: -20 }}>
-            <BarChart data={brandData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="quarter" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
-
-              <Bar dataKey="Zolgensma" stackId="a" fill="#004567" />
-              <Bar dataKey="Spinraza" stackId="a" fill="#8295ae" />
-              <Bar dataKey="Evrysdi" stackId="a" fill="#5aa687" radius={[10, 10, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
+        <ResponsiveContainer width="100%" height="90%">
+          <BarChart data={brandData} margin={{ top: 20, right: 30, left: -20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="quarter" tick={{ fontSize: 10 }} interval={0} tickFormatter={(value) => value} />
+            <XAxis
+              dataKey="yearLabel"
+              axisLine={false}
+              tickLine={false}
+              interval={0}
+              tick={{ fontSize: 11, dx: 40 }}
+              height={20}
+              xAxisId="year"
+              tickFormatter={(value) => value}
+            />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Bar dataKey="Zolgensma" stackId="a" fill="#8E58B3" />
+            <Bar dataKey="Spinraza" stackId="a" fill="#2A9FB0" />
+            <Bar dataKey="Evrysdi" stackId="a" fill="#D50057">
+              <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Charts - Second Row */}
@@ -789,7 +825,9 @@ const HCPlandscape = () => {
 
               <Bar dataKey="<2" stackId="a" fill="#2c84b0" />
               <Bar dataKey="3-17" stackId="a" fill="#8295ae" />
-              <Bar dataKey=">18" stackId="a" fill="#addaf0" radius={[10, 10, 0, 0]} />
+              <Bar dataKey=">18" stackId="a" fill="#addaf0" radius={[10, 10, 0, 0]}>
+                <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -840,7 +878,9 @@ const HCPlandscape = () => {
               <Bar dataKey="Neurology" stackId="a" fill="#addaf0" />
               <Bar dataKey="Neuromuscular" stackId="a" fill="#e7caed" />
               <Bar dataKey="NP/PA" stackId="a" fill="#bac8f5" />
-              <Bar dataKey="All Others" stackId="a" fill="#f5d6ba" radius={[10, 10, 0, 0]} />
+              <Bar dataKey="All Others" stackId="a" fill="#f5d6ba" radius={[10, 10, 0, 0]}>
+                <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -900,6 +940,57 @@ const HCPlandscape = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination with 5 visible pages */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center py-2 border-t border-gray-200">
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === 1}
+              onClick={() => handlePageChange(1)}
+            >
+              First
+            </button>
+
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              Previous
+            </button>
+
+            <div className="flex mx-2">
+              {getPaginationRange().map((page) => (
+                <button
+                  key={page}
+                  className={`w-6 h-6 mx-1 rounded-full text-[10px] ${
+                    currentPage === page ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                  }`}
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              Next
+            </button>
+
+            <button
+              className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
+              disabled={currentPage === totalPages}
+              onClick={() => handlePageChange(totalPages)}
+            >
+              Last
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

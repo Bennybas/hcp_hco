@@ -1,21 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, MoveUpRight } from "lucide-react"
-import {
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ResponsiveContainer,
-  Legend,
-} from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { ComposableMap, Geographies, Geography } from "react-simple-maps"
 import { useNavigate } from "react-router-dom"
 
@@ -24,6 +12,7 @@ const AccountLandscape = () => {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [openDropdown, setOpenDropdown] = useState(null)
+  const dataFetchedRef = useRef(false)
 
   // State for KPI metrics
   const [kpiData, setKpiData] = useState({
@@ -35,11 +24,11 @@ const AccountLandscape = () => {
   })
 
   // State for chart data
-  const [quarterData, setQuarterData] = useState([])
   const [facilityTypeData, setFacilityTypeData] = useState([])
   const [hcoTierData, setHcoTierData] = useState([])
   const [accountTableData, setAccountTableData] = useState([])
   const [allAccountTableData, setAllAccountTableData] = useState([])
+  const [facilityTypeByQuarterData, setFacilityTypeByQuarterData] = useState([])
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -47,7 +36,7 @@ const AccountLandscape = () => {
 
   // State for filters
   const [filters, setFilters] = useState({
-    year: "2024", // Default year, will be updated with most recent year
+    year: "All", // Default to All years
     ageFilter: "All",
     brand: "All",
     state: "All",
@@ -58,40 +47,34 @@ const AccountLandscape = () => {
 
   // Filter options
   const [filterOptions, setFilterOptions] = useState({
-    years: [],
+    years: ["All"],
     ages: ["All"],
     brands: ["All"],
     states: ["All"],
   })
 
-  // Fetch available years on component mount
+  // Fetch data only once when component mounts
   useEffect(() => {
-    const fetchAvailableYears = async () => {
+    const fetchData = async () => {
+      // Only fetch data if it hasn't been fetched before
+      if (dataFetchedRef.current) return
+
       try {
         setLoading(true)
         // Fetch data without year filter to get all records
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape")
+        const response = await fetch("http://127.0.0.1:5000/fetch-hcolandscape")
         const jsonData = await response.json()
 
-        // Extract unique years from the data
+        // Extract unique years from the data, excluding 2016 and 2025
         const years = [...new Set(jsonData.map((item) => item.year))]
-          .filter((year) => year && year !== "-")
-          .sort((a, b) => b - a) // Sort years in ascending order
+          .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
+          .sort((a, b) => b - a) // Sort years in descending order
 
         // Update filter options with available years
         setFilterOptions((prev) => ({
           ...prev,
-          years: years.length > 0 ? years : ["2024"], // Default to 2024 if no years found
+          years: ["All", ...years],
         }))
-
-        // Set default year to the most recent year
-        if (years.length > 0) {
-          const mostRecentYear = years[0];
-          setFilters((prev) => ({
-            ...prev,
-            year: mostRecentYear,
-          }))
-        }
 
         // Set the data
         setData(jsonData)
@@ -99,19 +82,17 @@ const AccountLandscape = () => {
         // Extract other filter options
         extractFilterOptions(jsonData)
 
+        // Mark data as fetched
+        dataFetchedRef.current = true
+
         setLoading(false)
       } catch (error) {
-        console.error("Error fetching available years:", error)
-        // Fallback to default years if there's an error
-        setFilterOptions((prev) => ({
-          ...prev,
-          years: ["2024"],
-        }))
+        console.error("Error fetching data:", error)
         setLoading(false)
       }
     }
 
-    fetchAvailableYears()
+    fetchData()
   }, []) // Empty dependency array ensures this runs only once on component mount
 
   // Process data when filters change
@@ -153,11 +134,11 @@ const AccountLandscape = () => {
     // Calculate KPI metrics
     calculateKPIMetrics(filteredData)
 
-    // Process quarterly patient data
-    processQuarterlyData(filteredData)
-
     // Process facility type data
     processFacilityTypeData(filteredData)
+
+    // Process facility type by quarter data
+    processFacilityTypeByQuarterData(filteredData)
 
     // Process HCO tier data
     processHcoTierData(filteredData)
@@ -168,8 +149,8 @@ const AccountLandscape = () => {
 
   const getFilteredData = () => {
     return data.filter((item) => {
-      // Year filter (always apply)
-      if (item.year !== filters.year) return false
+      // Year filter
+      if (filters.year !== "All" && item.year !== filters.year) return false
 
       // Age filter
       if (filters.ageFilter !== "All" && item.age_group !== filters.ageFilter) return false
@@ -225,35 +206,6 @@ const AccountLandscape = () => {
     })
   }
 
-  const processQuarterlyData = (filteredData) => {
-    // Group patients by quarter
-    const quarterCounts = {}
-
-    filteredData.forEach((item) => {
-      if (item.quarter && item.patient_id && item.patient_id !== "-") {
-        const quarter = Number.parseInt(item.quarter)
-        if (!quarterCounts[quarter]) {
-          quarterCounts[quarter] = new Set()
-        }
-        quarterCounts[quarter].add(item.patient_id)
-      }
-    })
-
-    // Format for chart
-    const formattedQuarterData = Object.entries(quarterCounts)
-      .map(([quarter, patients]) => ({
-        month: `Quarter ${quarter}`,
-        Patients: patients.size,
-      }))
-      .sort((a, b) => {
-        const quarterA = Number.parseInt(a.month.substring(8))
-        const quarterB = Number.parseInt(b.month.substring(8))
-        return quarterA - quarterB
-      })
-
-    setQuarterData(formattedQuarterData)
-  }
-
   const processFacilityTypeData = (filteredData) => {
     // Group by hco_grouping and count unique patients
     const groupingMap = new Map()
@@ -267,15 +219,15 @@ const AccountLandscape = () => {
       }
     })
 
-    // Convert to array format for pie chart
+    // Convert to array format for chart
     const colors = [
       "#00599D", // Keep this as the primary blue
       "#4A7D99", // Darker than #6A99B5
       "#52C97C", // Darker than #7DFFA8
       "#C087CB", // Darker than #F0C3F7
       "#91BDD8", // Darker than #C8E3F5
-    ];
-    
+    ]
+
     const result = Array.from(groupingMap.entries())
       .map(([name, patients], index) => ({
         name,
@@ -285,6 +237,83 @@ const AccountLandscape = () => {
       .sort((a, b) => b.value - a.value) // Sort by value in descending order
 
     setFacilityTypeData(result)
+  }
+
+  const processFacilityTypeByQuarterData = (filteredData) => {
+    // Group by year, quarter, and facility type
+    const yearQuarterFacilityMap = new Map()
+
+    // Get unique facility types (excluding "-")
+    const facilityTypes = [
+      ...new Set(filteredData.map((item) => item.hco_grouping).filter((type) => type && type !== "-")),
+    ]
+
+    // Process each record
+    filteredData.forEach((item) => {
+      if (
+        item.year &&
+        item.quarter &&
+        item.hco_grouping &&
+        item.patient_id &&
+        item.year !== "-" &&
+        item.quarter !== "-" &&
+        item.hco_grouping !== "-" &&
+        item.patient_id !== "-"
+      ) {
+        // Skip 2016 and 2025 data
+        if (item.year === "2016" || item.year === "2025") return
+
+        // Create a key for this year-quarter combination
+        const yearQuarterKey = `${item.year}-Q${item.quarter}`
+
+        // Initialize this year-quarter entry if it doesn't exist
+        if (!yearQuarterFacilityMap.has(yearQuarterKey)) {
+          const entry = {
+            yearQuarter: yearQuarterKey,
+            year: item.year,
+            quarter: `Q${item.quarter}`,
+            displayOrder: Number.parseInt(item.year) * 10 + Number.parseInt(item.quarter),
+          }
+
+          // Initialize counts for each facility type to 0
+          facilityTypes.forEach((type) => {
+            entry[type] = 0
+          })
+
+          yearQuarterFacilityMap.set(yearQuarterKey, entry)
+        }
+
+        // Get the current entry
+        const entry = yearQuarterFacilityMap.get(yearQuarterKey)
+
+        // Increment the count for this facility type
+        if (entry[item.hco_grouping] !== undefined) {
+          entry[item.hco_grouping] += 1
+        } else {
+          entry[item.hco_grouping] = 1
+        }
+      }
+    })
+
+    // Convert to array and sort by year and quarter
+    const result = Array.from(yearQuarterFacilityMap.values())
+
+    // Sort by year and quarter
+    result.sort((a, b) => a.displayOrder - b.displayOrder)
+
+    // Add yearLabel property - only set for the first quarter of each year
+    const processedYears = new Set()
+    result.forEach((item) => {
+      if (!processedYears.has(item.year)) {
+        item.yearLabel = item.year
+        processedYears.add(item.year)
+      } else {
+        item.yearLabel = ""
+      }
+    })
+
+    // Set the data for the chart
+    setFacilityTypeByQuarterData(result)
   }
 
   const processHcoTierData = (filteredData) => {
@@ -493,7 +522,7 @@ const AccountLandscape = () => {
   return (
     <div className="flex flex-col gap-4 w-full p-2">
       {/* Filters */}
-      <div className="flex gap-4 items-center">
+      <div className="flex gap-4 items-center flex-wrap">
         {/* Year Filter */}
         <div className="relative">
           <div
@@ -599,7 +628,7 @@ const AccountLandscape = () => {
         </div>
 
         {/* KOL Filter */}
-        <div className="flex items-center rounded-xl border  py-1 gap-2  bg-white px-2">
+        <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">KOL</span>
           <button
             onClick={() => toggleFilter("kol", "Yes")}
@@ -616,7 +645,7 @@ const AccountLandscape = () => {
         </div>
 
         {/* Zolgensma Prescriber Filter */}
-        <div className="flex items-center rounded-xl border  py-1 gap-2  bg-white px-2">
+        <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">Zolgensma Prescriber</span>
           <button
             onClick={() => toggleFilter("zolgPrescriber", "Yes")}
@@ -633,7 +662,7 @@ const AccountLandscape = () => {
         </div>
 
         {/* Zolgensma IV Target Filter */}
-        <div className="flex items-center rounded-xl border py-1 gap-2  bg-white px-2">
+        <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">Zolgensma IV Target</span>
           <button
             onClick={() => toggleFilter("zolgIVTarget", "Yes")}
@@ -672,9 +701,9 @@ const AccountLandscape = () => {
 
             <div className="flex items-center gap-1">
               <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M}</span>
-              <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
+              {/* <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
               <span className="text-green-500 text-xs">5.2%</span>
-              <span className="text-gray-500 text-xs">vs last month</span>
+              <span className="text-gray-500 text-xs">vs last month</span> */}
             </div>
           </div>
         </div>
@@ -710,54 +739,66 @@ const AccountLandscape = () => {
         </div>
       </div>
 
-      {/* Charts - First Row */}
-      <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-56 p-2">
-          <span className="text-gray-500 text-[11px] font-[500] pb-4">#QoQ SMA Treated Patients by Archetype</span>
-          <ResponsiveContainer width="100%" height="90%">
-            <LineChart data={quarterData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-              <Line type="monotone" dataKey="Patients" stroke="#0b5cab" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Facility Type by Quarter Chart - Full Width */}
+      <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-56 p-2">
+        <span className="text-gray-500 text-[11px] font-[500] pb-4">Accounts by Facility Type</span>
+        <ResponsiveContainer width="100%" height="90%">
+          <BarChart data={facilityTypeByQuarterData} margin={{ top: 20, right: 30, left: -20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="quarter" tick={{ fontSize: 10 }} interval={0} tickFormatter={(value) => value} />
+            <XAxis
+              dataKey="yearLabel"
+              axisLine={false}
+              tickLine={false}
+              interval={0}
+              tick={{ fontSize: 11, dx: 40 }}
+              height={20}
+              xAxisId="year"
+              tickFormatter={(value) => value}
+            />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
+            <Legend wrapperStyle={{ fontSize: 9 }} />
+            {facilityTypeByQuarterData.length > 0 &&
+              (() => {
+                // Get all the facility type keys
+                const facilityKeys = Object.keys(facilityTypeByQuarterData[0]).filter(
+                  (key) => !["yearQuarter", "year", "quarter", "displayOrder", "yearLabel", "total"].includes(key),
+                )
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-56 p-2">
-          <div className="flex gap-2 items-center justify-between w-full pb-4">
-            <span className="text-gray-500 text-[11px] font-[500]">Accounts by Facility Type</span>
-          </div>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={facilityTypeData}
-                cx="50%"
-                cy="50%"
-                innerRadius={40}
-                outerRadius={60}
-                fill="#8884d8"
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {facilityTypeData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-              <Legend
-                layout="vertical"
-                align="right"
-                verticalAlign="middle"
-                wrapperStyle={{ fontSize: "10px" }}
-                formatter={(value, entry, index) => (
-                  <span style={{ marginBottom: "4px", display: "inline-block" }}>{value}</span>
-                )}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+                // Define a set of colors for the bars
+                const colors = ["#00599D", "#4A7D99", "#52C97C", "#C087CB", "#91BDD8", "#E6A0C4", "#8884d8", "#82ca9d"]
+
+                // Process the data to add total values
+                facilityTypeByQuarterData.forEach((entry) => {
+                  let total = 0
+                  facilityKeys.forEach((key) => {
+                    total += entry[key] || 0
+                  })
+                  entry.total = total
+                })
+
+                // Return the bars with the last one having a label
+                return facilityKeys.map((key, index) => {
+                  const isLastKey = index === facilityKeys.length - 1
+                  return (
+                    <Bar key={key} dataKey={key} stackId="a" fill={colors[index % colors.length]} name={key}>
+                      {isLastKey && (
+                        <LabelList
+                          dataKey="total"
+                          position="top"
+                          offset={5}
+                          fill="#333"
+                          fontSize={9}
+                          fontWeight="15px"
+                        />
+                      )}
+                    </Bar>
+                  )
+                })
+              })()}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Charts - Second Row */}
@@ -877,23 +918,33 @@ const AccountLandscape = () => {
             </button>
 
             <div className="flex mx-2">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  className={`w-6 h-6 mx-1 rounded-full text-[10px] ${
-                    currentPage === page ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                  }`}
-                  onClick={() => handlePageChange(page)}
-                >
-                  {page}
-                </button>
-              ))}
+              {(() => {
+                // Calculate which group of 5 pages we're in
+                const pageGroup = Math.ceil(currentPage / 5)
+                const startPage = (pageGroup - 1) * 5 + 1
+                const endPage = Math.min(startPage + 4, totalPages)
+
+                return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((page) => (
+                  <button
+                    key={page}
+                    className={`w-6 h-6 mx-1 rounded-full text-[10px] ${
+                      currentPage === page ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
+                    }`}
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </button>
+                ))
+              })()}
             </div>
 
             <button
               className="px-2 py-1 text-[10px] text-gray-600 disabled:text-gray-400"
-              disabled={currentPage === totalPages}
-              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={Math.ceil(currentPage / 5) * 5 >= totalPages}
+              onClick={() => {
+                const nextGroupStart = Math.ceil(currentPage / 5) * 5 + 1
+                handlePageChange(Math.min(nextGroupStart, totalPages))
+              }}
             >
               Next
             </button>
