@@ -85,8 +85,8 @@ const Header = () => {
                   onClick={() => setActivePage(card.path)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-3xl transition-all duration-200 ease-in-out 
                     ${activePage === card.path
-                      ? "bg-[#004567] text-[#f0f3f7] text-md"
-                      : "text-[#697280] bg-white hover:bg-[#004567]/80 hover:text-[#f0f3f7]"
+                      ? "bg-[#0460A9] text-[#f0f3f7] text-md"
+                      : "text-[#697280] bg-white hover:bg-[#0460A9]/80 hover:text-[#f0f3f7]"
                     }`}
                 >
                   <card.Icon className="text-md" />
@@ -101,8 +101,8 @@ const Header = () => {
                         onClick={() => setActiveReferType(type.title)}
                         className={`flex items-center gap-2 px-2 py-1 rounded-3xl transition-all duration-200 ease-in-out 
                           ${activeReferType === type.title
-                            ? "bg-[#004567] text-[#f0f3f7] text-md"
-                            : "text-[#697280] hover:bg-[#004567]/80 hover:text-[#f0f3f7]"
+                            ? "bg-[#0460A9] text-[#f0f3f7] text-md"
+                            : "text-[#697280] bg-white hover:bg-[#0460A9]/80 hover:text-[#f0f3f7]"
                           }`}
                       >
                         <span className="text-sm" style={{ fontSize: '10px' }}>{type.title}</span>

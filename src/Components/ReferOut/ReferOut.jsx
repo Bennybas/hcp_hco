@@ -682,16 +682,16 @@ const ReferOut = ({ referType = "HCP" }) => {
           <div className="relative">
             <div
               className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                filters.state !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                filters.state !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
               } cursor-pointer transition-colors duration-150`}
               onClick={() => toggleDropdown("state")}
             >
               <span
-                className={`text-[11px] ${filters.state !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                className={`text-[11px] ${filters.state !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
               >
                 State: {filters.state}
               </span>
-              <ChevronDown className={`w-4 h-4 ${filters.state !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+              <ChevronDown className={`w-4 h-4 ${filters.state !== "All" ? "text-[#0460A9]" : "text-gray-500"}`} />
             </div>
             {openDropdown === "state" && (
               <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
@@ -716,7 +716,7 @@ const ReferOut = ({ referType = "HCP" }) => {
             <button
               className={`text-[11px] px-2 py-1 rounded-md transition-colors ${
                 filters.organizationFilter === "Within"
-                  ? "bg-[#217fad] text-white"
+                  ? "bg-[#0460A9] text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
               onClick={() => handleOrganizationFilterClick("Within")}
@@ -726,7 +726,7 @@ const ReferOut = ({ referType = "HCP" }) => {
             <button
               className={`text-[11px] px-2 py-1 rounded-md transition-colors ${
                 filters.organizationFilter === "Outside"
-                  ? "bg-blue-500 text-white"
+                  ? "bg-[#0460A9]  text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
               onClick={() => handleOrganizationFilterClick("Outside")}
@@ -742,16 +742,16 @@ const ReferOut = ({ referType = "HCP" }) => {
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcpType !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                    filters.hcpType !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcpType")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcpType !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcpType !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
                   >
                     HCP Type: {filters.hcpType}
                   </span>
-                  <ChevronDown className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+                  <ChevronDown className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-[#0460A9]" : "text-gray-500"}`} />
                 </div>
                 {openDropdown === "hcpType" && (
                   <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[1000] w-48 max-h-40 overflow-y-auto">
@@ -774,17 +774,17 @@ const ReferOut = ({ referType = "HCP" }) => {
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcpSpecialty !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                    filters.hcpSpecialty !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcpSpecialty")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcpSpecialty !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcpSpecialty !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
                   >
                     HCP Specialty: {filters.hcpSpecialty}
                   </span>
                   <ChevronDown
-                    className={`w-4 h-4 ${filters.hcpSpecialty !== "All" ? "text-blue-500" : "text-gray-500"}`}
+                    className={`w-4 h-4 ${filters.hcpSpecialty !== "All" ? "text-[#0460A9]" : "text-gray-500"}`}
                   />
                 </div>
                 {openDropdown === "hcpSpecialty" && (

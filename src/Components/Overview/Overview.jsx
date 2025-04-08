@@ -354,7 +354,7 @@ const Overview = () => {
         </div>
       </div>
 
-      <div className="flex flex-col w-[42%]">
+      <div className="flex flex-col w-[42%] mt-[4rem]">
         <USAMap onStateSelect={handleStateSelect} />
         {/* {selectedState && (
           <div className="mt-2 p-2 bg-blue-50 rounded-md text-center">

@@ -151,7 +151,7 @@ const tierColors = {
   "Tier 4": "#FF585D", // Red
 }
 
-const USAMap = ({ onStateSelect }) => {
+const AccountMap = ({ onStateSelect }) => {
   const navigate = useNavigate()
   const [mapData, setMapData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -550,31 +550,18 @@ const USAMap = ({ onStateSelect }) => {
           // Create custom icon with the appropriate color based on tier
           const hcoIcon = L.divIcon({
             className: "custom-marker-icon",
-            html: `
-              <div style="
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                pointer-events: auto;
-              ">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" width="24" height="24">
-                  <path fill="${markerColor}" fill-rule="evenodd"
-                    d="M11.291 21.706 12 21l-.709.706zM12 21l.708.706a1 1 0 0 1-1.417 0l-.006-.007-.017-.017-.062-.063a47.708 47.708 0 0 1-1.04-1.106 49.562 49.562 0 0 1-2.456-2.908c-.892-1.15-1.804-2.45-2.497-3.734C4.535 12.612 4 11.248 4 10c0-4.539 3.592-8 8-8 4.408 0 8 3.461 8 8 0 1.248-.535 2.612-1.213 3.87-.693 1.286-1.604 2.585-2.497 3.735a49.583 49.583 0 0 1-3.496 4.014l-.062.063-.017.017-.006.006L12 21zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
-                    clip-rule="evenodd"></path>
-                </svg>
-              </div>
-            `,
+            html: `<div style="color: ${markerColor}; width: 24px; height: 24px; z-index: 1000;">
+                    
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="${markerColor}" fill-rule="evenodd" d="M11.291 21.706 12 21l-.709.706zM12 21l.708.706a1 1 0 0 1-1.417 0l-.006-.007-.017-.017-.062-.063a47.708 47.708 0 0 1-1.04-1.106 49.562 49.562 0 0 1-2.456-2.908c-.892-1.15-1.804-2.45-2.497-3.734C4.535 12.612 4 11.248 4 10c0-4.539 3.592-8 8-8 4.408 0 8 3.461 8 8 0 1.248-.535 2.612-1.213 3.87-.693 1.286-1.604 2.585-2.497 3.735a49.583 49.583 0 0 1-3.496 4.014l-.062.063-.017.017-.006.006L12 21zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" clip-rule="evenodd"></path></g></svg>
+                   </div>`,
             iconSize: [24, 24],
-            iconAnchor: [12, 24], // anchor should be at the bottom center
-          });
-          
+            iconAnchor: [12, 24],
+          })
 
           try {
             const marker = L.marker([lat, lng], {
               icon: hcoIcon,
-              zIndexOffset: 1000,
+              zIndexOffset: 1000, // Ensure markers appear above other layers
             })
 
             // Use the actual name from the location data, with a fallback
@@ -582,7 +569,7 @@ const USAMap = ({ onStateSelect }) => {
 
             // Add popup with information
             marker.bindPopup(`
-              <div class="p-2 text-[12px]">
+              <div class="p-2">
                 <h3 class="font-bold">${displayName}</h3>
                 <p>Tier: ${location.tier}</p>
                 <p>HCPs: ${location.hcpCount}</p>
@@ -1043,10 +1030,10 @@ const USAMap = ({ onStateSelect }) => {
   const zipDisplayCount = showAllZips ? selectedStateZips.length : 12
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 h-60 ">
       {/* Map container */}
       <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div id={mapContainerId.current} style={{ height: "550px", width: "100%" }} className="rounded-xl z-0"></div>
+        <div id={mapContainerId.current} style={{ height: "240px", width: "100%" }} className="rounded-xl z-0"></div>
 
         {/* Map tooltip */}
         <div
@@ -1145,4 +1132,4 @@ const USAMap = ({ onStateSelect }) => {
   )
 }
 
-export default USAMap
+export default AccountMap

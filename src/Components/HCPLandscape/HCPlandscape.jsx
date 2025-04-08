@@ -639,7 +639,7 @@ const HCPlandscape = () => {
         {/* Brand Filter */}
         <div className="relative">
           <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            className="flex items-center py-1 px-2 rounded-lg bg-white  justify-between cursor-pointer min-w-[120px]"
             onClick={() => toggleDropdown("brand")}
           >
             <span className="text-[12px] text-gray-600">Brand: {filters.brand}</span>
@@ -665,7 +665,7 @@ const HCPlandscape = () => {
         {/* Age Filter */}
         <div className="relative">
           <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+            className="flex items-center py-1 px-2 rounded-lg  bg-white justify-between cursor-pointer min-w-[120px]"
             onClick={() => toggleDropdown("age")}
           >
             <span className="text-[12px] text-gray-600">Age: {filters.age}</span>
@@ -688,7 +688,7 @@ const HCPlandscape = () => {
           )}
         </div>
       </div>
-
+      <div></div>
       {/* KPI Cards */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -752,15 +752,15 @@ const HCPlandscape = () => {
           <span className="text-gray-500 text-[11px] font-[500]">#QoQ Patients By Brand</span>
           <div className="flex gap-2 items-center">
             <div className="flex gap-1 items-center">
-              <div className="bg-[#004567] rounded-full w-2 h-2"></div>
+              <div className="bg-[#8E58B3] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">Zolgensma</span>
             </div>
             <div className="flex gap-1 items-center">
-              <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
+              <div className="bg-[#2A9FB0] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">Spinraza</span>
             </div>
             <div className="flex gap-1 items-center">
-              <div className="bg-[#5aa687] rounded-full w-2 h-2"></div>
+              <div className="bg-[#D50057] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">Evrysdi</span>
             </div>
           </div>
@@ -780,7 +780,8 @@ const HCPlandscape = () => {
               tickFormatter={(value) => value}
             />
             <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip />
+            <Tooltip formatter={(value) =>`${value}`} labelStyle={{ fontSize: 11 }}
+                itemStyle={{ fontSize: 10 }}/>
             <Bar dataKey="Zolgensma" stackId="a" fill="#8E58B3" />
             <Bar dataKey="Spinraza" stackId="a" fill="#2A9FB0" />
             <Bar dataKey="Evrysdi" stackId="a" fill="#D50057">
@@ -990,7 +991,7 @@ const HCPlandscape = () => {
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
                   <td className="p-2">{hcp.Rank}</td>
-                  <td className="p-2">{hcp["HCP ID"]}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">{hcp["HCP ID"]}</td>
                   <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
                     {hcp["HCP Name"]}
                   </td>

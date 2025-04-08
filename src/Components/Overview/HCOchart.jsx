@@ -12,11 +12,12 @@ import {
 const HCOchart = ({ HCOdata }) => {
   const formatSegmentName = (segment) => {
     segment = segment.replace(/-/g, '').toUpperCase()
-    if (segment === 'TIER 1') return 'Tier 1'
-    if (segment === 'TIER 2') return 'Tier 2'
-    if (segment === 'TIER 3') return 'Tier 3'
+    if (segment === 'TIER 1') return 'High'
+    if (segment === 'TIER 2') return 'Medium'
+    if (segment === 'TIER 3') return 'Low'
+    if (segment === 'TIER 4') return 'Very Low' 
     return segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase()
-  }
+  }  
 
   const segmentData = useMemo(() => {
     if (!HCOdata || !Array.isArray(HCOdata) || HCOdata.length === 0) return []
@@ -38,7 +39,7 @@ const HCOchart = ({ HCOdata }) => {
       value: hcoSet.size,
     }))
 
-    const orderMap = { 'TIER 1': 0, 'TIER 2': 1, 'TIER 3': 2 }
+    const orderMap = { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2, 'VERY LOW': 3 }
     result.sort((a, b) => {
       const aOrder = orderMap[a.name.toUpperCase()] ?? 999
       const bOrder = orderMap[b.name.toUpperCase()] ?? 999
@@ -74,7 +75,7 @@ const HCOchart = ({ HCOdata }) => {
         <BarChart
           layout="vertical"
           data={segmentData}
-          margin={{ top: 10, right: 30, left: -20, bottom: 10 }}
+          margin={{ top: 10, right: 30, left: -15, bottom: 10 }}
         >
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis
@@ -83,7 +84,7 @@ const HCOchart = ({ HCOdata }) => {
             tick={{ fontSize: 12 }}
             width={70}
           />
-          <Tooltip  wrapperStyle={{ fontSize: '10px' }}/>
+          <Tooltip wrapperStyle={{ fontSize: '10px' }} />
           <Bar dataKey="value" radius={[0, 10, 10, 0]}>
             {segmentData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
