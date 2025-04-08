@@ -7,6 +7,7 @@ import "leaflet.markercluster"
 import "leaflet.markercluster/dist/MarkerCluster.css"
 import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 import { scaleQuantile } from "d3-scale"
+import api from '../api/api'
 
 // State abbreviations to full names mapping
 const stateAbbreviationToName = {
@@ -164,7 +165,7 @@ const USAMap = ({ onStateSelect }) => {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-map-data")
+        const response = await fetch(`${api}/fetch-map-data`)
         if (!response.ok) {
           throw new Error("Network response was not ok")
         }
@@ -505,10 +506,11 @@ const USAMap = ({ onStateSelect }) => {
         // Create custom icons with higher z-index
         const hcoIcon = L.divIcon({
           className: "custom-marker-icon",
-          html: `<div class="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs font-bold" style="z-index: 1000;">HCO</div>`,
+          html: `<img src="/location-marker-svgrepo-com.svg" alt="HCO" style="width: 24px; height: 24px; z-index: 1000;" />`,
           iconSize: [24, 24],
-          iconAnchor: [12, 12],
-        })
+          iconAnchor: [24, 30], 
+        });
+        
 
         // In the addStateMarkers function, let's debug and fix the HCO name issue
         // Find the section where markers are created (around line 400-450)

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom"
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
 import { useLocation } from "react-router-dom"
 import * as d3 from "d3"
+import api from '../api/api'
 
 const HCPdeepDive = () => {
   const navigate = useNavigate()
@@ -34,7 +35,7 @@ const HCPdeepDive = () => {
     const fetchHCPData = async () => {
       try {
         setLoading(true)
-        const hcpurl = `https://hcp-hco-backend.onrender.com/hcp-360?hcp_name=${encodeURIComponent(hcpName)}`
+        const hcpurl = `${api}/hcp-360?hcp_name=${encodeURIComponent(hcpName)}`
         const response = await fetch(hcpurl)
         const data = await response.json()
 
@@ -57,7 +58,7 @@ const HCPdeepDive = () => {
 
       try {
         setReferralLoading(true) // Set loading to true when starting fetch
-        const referralUrl = `https://hcp-hco-backend.onrender.com/hcp-360?ref_npi=${hcpNPI}`
+        const referralUrl = `${api}/hcp-360?ref_npi=${hcpNPI}`
         const response = await fetch(referralUrl)
         const data = await response.json()
 

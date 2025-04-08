@@ -105,9 +105,14 @@ const ReferOut = ({ referType = "HCP" }) => {
 
   // State for filters - different filters based on referType
   const [filters, setFilters] = useState({
+    // Common filters
+    state: "All",
+    organizationFilter: "All", // "All", "Within", "Outside"
+
     // HCP filters
     hcpType: "All",
     hcpSpecialty: "All",
+
     // HCO filters
     hcoTier: "All",
     hcoArchetype: "All",
@@ -115,9 +120,13 @@ const ReferOut = ({ referType = "HCP" }) => {
 
   // State for filter options
   const [filterOptions, setFilterOptions] = useState({
+    // Common filter options
+    states: ["All"],
+
     // HCP filter options
     hcpTypes: ["All"],
     hcpSpecialties: ["All"],
+
     // HCO filter options
     hcoTiers: ["All"],
     hcoArchetypes: ["All"],
@@ -162,58 +171,80 @@ const ReferOut = ({ referType = "HCP" }) => {
   // Load data from local JSON file
   useEffect(() => {
     try {
-      setLoading(true)
+      setLoading(true) // Set loading to true when referType changes
+      setFilterLoading(true) // Also set filter loading
       setSelectedEntity({ referring: null, rendering: null })
       setSearchTerms({ referring: "", rendering: "" })
+      setMapReady(false) // Reset map ready state
 
-      // Clean the data from the imported JSON
-      const cleanedData = cleanData(JSONData)
-      setData(cleanedData)
+      // Add a small delay to ensure UI shows loading state
+      setTimeout(() => {
+        // Clean the data from the imported JSON
+        const cleanedData = cleanData(JSONData)
+        setData(cleanedData)
 
-      // Extract filter options based on referType
-      if (referType === "HCP") {
-        const hcpTypes = ["All", ...new Set(cleanedData.map((item) => item.hcp_segment).filter(Boolean))]
-        const hcpSpecialties = ["All", ...new Set(cleanedData.map((item) => item.final_spec).filter(Boolean))]
+        // Extract common filter options
+        const states = [
+          "All",
+          ...new Set([
+            ...cleanedData.map((item) => item.hco_state).filter(Boolean),
+            ...cleanedData.map((item) => item.ref_hco_state).filter(Boolean),
+          ]),
+        ]
 
-        setFilterOptions((prev) => ({
-          ...prev,
-          hcpTypes,
-          hcpSpecialties,
-        }))
+        // Extract filter options based on referType
+        if (referType === "HCP") {
+          const hcpTypes = ["All", ...new Set(cleanedData.map((item) => item.hcp_segment).filter(Boolean))]
+          const hcpSpecialties = ["All", ...new Set(cleanedData.map((item) => item.final_spec).filter(Boolean))]
 
-        // Reset HCP-specific filters
-        setFilters((prev) => ({
-          ...prev,
-          hcpType: "All",
-          hcpSpecialty: "All",
-        }))
-      } else {
-        // HCO filters
-        const hcoTiers = ["All", ...new Set(cleanedData.map((item) => item.hco_mdm_tier).filter(Boolean))]
-        const hcoArchetypes = ["All", ...new Set(cleanedData.map((item) => item.hco_grouping).filter(Boolean))]
+          setFilterOptions((prev) => ({
+            ...prev,
+            states,
+            hcpTypes,
+            hcpSpecialties,
+          }))
 
-        setFilterOptions((prev) => ({
-          ...prev,
-          hcoTiers,
-          hcoArchetypes,
-        }))
+          // Reset HCP-specific filters
+          setFilters((prev) => ({
+            ...prev,
+            state: "All",
+            organizationFilter: "All",
+            hcpType: "All",
+            hcpSpecialty: "All",
+          }))
+        } else {
+          // HCO filters
+          const hcoTiers = ["All", ...new Set(cleanedData.map((item) => item.hco_mdm_tier).filter(Boolean))]
+          const hcoArchetypes = ["All", ...new Set(cleanedData.map((item) => item.hco_grouping).filter(Boolean))]
 
-        // Reset HCO-specific filters
-        setFilters((prev) => ({
-          ...prev,
-          hcoTier: "All",
-          hcoArchetype: "All",
-        }))
-      }
+          setFilterOptions((prev) => ({
+            ...prev,
+            states,
+            hcoTiers,
+            hcoArchetypes,
+          }))
 
-      // Set filtered data initially to all data
-      setFilteredData(cleanedData)
+          // Reset HCO-specific filters
+          setFilters((prev) => ({
+            ...prev,
+            state: "All",
+            organizationFilter: "All",
+            hcoTier: "All",
+            hcoArchetype: "All",
+          }))
+        }
 
-      setLoading(false)
+        // Set filtered data initially to all data
+        setFilteredData(cleanedData)
+
+        setLoading(false)
+        setFilterLoading(false)
+      }, 300) // Add a small delay for better UX
     } catch (err) {
       console.error("Error processing data:", err)
       setError("Failed to process data. Please check the JSON format.")
       setLoading(false)
+      setFilterLoading(false)
     }
   }, [referType]) // Re-run when referType changes
 
@@ -228,6 +259,55 @@ const ReferOut = ({ referType = "HCP" }) => {
       try {
         let filtered = [...data]
 
+        // Apply state filter (common for both HCP and HCO)
+        if (filters.state !== "All") {
+          filtered = filtered.filter((item) => item.hco_state === filters.state || item.ref_hco_state === filters.state)
+        }
+
+        // Apply organization filter (common for both HCP and HCO)
+        if (filters.organizationFilter !== "All") {
+          if (referType === "HCP") {
+            // For HCP view, compare referring HCP's organization with rendering HCP's organization
+            if (filters.organizationFilter === "Within") {
+              // Only include referrals within the same organization
+              filtered = filtered.filter(
+                (item) =>
+                  item.ref_organization_mdm_name &&
+                  item.hco_mdm_name &&
+                  item.ref_organization_mdm_name === item.hco_mdm_name,
+              )
+            } else if (filters.organizationFilter === "Outside") {
+              // Only include referrals to different organizations
+              filtered = filtered.filter(
+                (item) =>
+                  item.ref_organization_mdm_name &&
+                  item.hco_mdm_name &&
+                  item.ref_organization_mdm_name !== item.hco_mdm_name,
+              )
+            }
+          } else {
+            // For HCO view, compare referring HCO with rendering HCO
+            if (filters.organizationFilter === "Within") {
+              // Only include referrals within the same organization
+              filtered = filtered.filter(
+                (item) =>
+                  item.ref_organization_mdm_name &&
+                  item.hco_mdm_name &&
+                  item.ref_organization_mdm_name === item.hco_mdm_name,
+              )
+            } else if (filters.organizationFilter === "Outside") {
+              // Only include referrals to different organizations
+              filtered = filtered.filter(
+                (item) =>
+                  item.ref_organization_mdm_name &&
+                  item.hco_mdm_name &&
+                  item.ref_organization_mdm_name !== item.hco_mdm_name,
+              )
+            }
+          }
+        }
+
+        // Apply HCP-specific filters
         if (referType === "HCP") {
           // Apply HCP type filter
           if (filters.hcpType !== "All") {
@@ -239,6 +319,7 @@ const ReferOut = ({ referType = "HCP" }) => {
             filtered = filtered.filter((item) => item.final_spec === filters.hcpSpecialty)
           }
         } else {
+          // Apply HCO-specific filters
           // Apply HCO tier filter
           if (filters.hcoTier !== "All") {
             filtered = filtered.filter((item) => item.hco_mdm_tier === filters.hcoTier)
@@ -318,6 +399,18 @@ const ReferOut = ({ referType = "HCP" }) => {
       setSelectedEntity((prev) => ({
         ...prev,
         [side]: prev[side] === entity ? null : entity,
+      }))
+    })
+  }
+
+  // Handle organization filter button click
+  const handleOrganizationFilterClick = (value) => {
+    setFilterLoading(true)
+
+    requestAnimationFrame(() => {
+      setFilters((prev) => ({
+        ...prev,
+        organizationFilter: prev.organizationFilter === value ? "All" : value,
       }))
     })
   }
@@ -540,19 +633,13 @@ const ReferOut = ({ referType = "HCP" }) => {
 
     // Use requestAnimationFrame to ensure the UI updates before processing
     requestAnimationFrame(() => {
-      if (referType === "HCP") {
-        setFilters((prev) => ({
-          ...prev,
-          hcpType: "All",
-          hcpSpecialty: "All",
-        }))
-      } else {
-        setFilters((prev) => ({
-          ...prev,
-          hcoTier: "All",
-          hcoArchetype: "All",
-        }))
-      }
+      // Reset common filters
+      setFilters((prev) => ({
+        ...prev,
+        state: "All",
+        organizationFilter: "All",
+        ...(referType === "HCP" ? { hcpType: "All", hcpSpecialty: "All" } : { hcoTier: "All", hcoArchetype: "All" }),
+      }))
 
       setSelectedEntity({
         referring: null,
@@ -574,10 +661,7 @@ const ReferOut = ({ referType = "HCP" }) => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-          <span className="text-gray-600">Loading {referType}...</span>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -593,7 +677,64 @@ const ReferOut = ({ referType = "HCP" }) => {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex justify-between items-center">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Common Filters - State Filter */}
+          <div className="relative">
+            <div
+              className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                filters.state !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+              } cursor-pointer transition-colors duration-150`}
+              onClick={() => toggleDropdown("state")}
+            >
+              <span
+                className={`text-[11px] ${filters.state !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+              >
+                State: {filters.state}
+              </span>
+              <ChevronDown className={`w-4 h-4 ${filters.state !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+            </div>
+            {openDropdown === "state" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                {filterOptions.states.map((state, i) => (
+                  <div
+                    key={i}
+                    className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                      filters.state === state ? "bg-blue-50 text-blue-600" : ""
+                    }`}
+                    onClick={() => handleFilterChange("state", state)}
+                  >
+                    {state}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Organization Filter Buttons */}
+          <div className="flex items-center gap-1 bg-white rounded-xl border-b border-x border-gray-300 p-1">
+            <span className="text-[11px] text-gray-600 px-1">Organization:</span>
+            <button
+              className={`text-[11px] px-2 py-1 rounded-md transition-colors ${
+                filters.organizationFilter === "Within"
+                  ? "bg-[#217fad] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => handleOrganizationFilterClick("Within")}
+            >
+              Within
+            </button>
+            <button
+              className={`text-[11px] px-2 py-1 rounded-md transition-colors ${
+                filters.organizationFilter === "Outside"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => handleOrganizationFilterClick("Outside")}
+            >
+              Outside
+            </button>
+          </div>
+
           {referType === "HCP" ? (
             // HCP Filters
             <>
@@ -613,7 +754,7 @@ const ReferOut = ({ referType = "HCP" }) => {
                   <ChevronDown className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-blue-500" : "text-gray-500"}`} />
                 </div>
                 {openDropdown === "hcpType" && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[1000] w-48 max-h-40 overflow-y-auto">
                     {filterOptions.hcpTypes.map((type, i) => (
                       <div
                         key={i}
@@ -647,7 +788,7 @@ const ReferOut = ({ referType = "HCP" }) => {
                   />
                 </div>
                 {openDropdown === "hcpSpecialty" && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[1000] w-48 max-h-40 overflow-y-auto">
                     {filterOptions.hcpSpecialties.map((specialty, i) => (
                       <div
                         key={i}

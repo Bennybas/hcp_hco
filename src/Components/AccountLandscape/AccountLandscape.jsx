@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, MoveUpRight } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronLeft } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { ComposableMap, Geographies, Geography } from "react-simple-maps"
 import { useNavigate } from "react-router-dom"
+import api from '../api/api'
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -13,6 +14,10 @@ const AccountLandscape = () => {
   const [loading, setLoading] = useState(true)
   const [openDropdown, setOpenDropdown] = useState(null)
   const dataFetchedRef = useRef(false)
+
+  const [expanded, setExpanded] = useState(false);
+
+  const toggleExpanded = () => setExpanded(!expanded);
 
   // State for KPI metrics
   const [kpiData, setKpiData] = useState({
@@ -62,7 +67,7 @@ const AccountLandscape = () => {
       try {
         setLoading(true)
         // Fetch data without year filter to get all records
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape")
+        const response = await fetch(`${api}/fetch-hcolandscape`)
         const jsonData = await response.json()
 
         // Extract unique years from the data, excluding 2016 and 2025
@@ -514,7 +519,7 @@ const AccountLandscape = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -524,7 +529,7 @@ const AccountLandscape = () => {
       {/* Filters */}
       <div className="flex gap-4 items-center flex-wrap">
         {/* Year Filter */}
-        <div className="relative">
+        {/* <div className="relative">
           <div
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[100px]"
             onClick={() => toggleDropdown("year")}
@@ -547,7 +552,7 @@ const AccountLandscape = () => {
               ))}
             </div>
           )}
-        </div>
+        </div> */}
 
         {/* Age Filter */}
         <div className="relative">
@@ -738,6 +743,42 @@ const AccountLandscape = () => {
           <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCOs}</span>
         </div>
       </div>
+
+      <div
+      className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2  items-center gap-2 cursor-pointer transition-all duration-300 ${
+        expanded ? "max-w-fit" : "w-20 justify-between"
+      }`}
+      onClick={toggleExpanded}
+    >
+      <span className="text-gray-600 text-[12px]">Year</span>
+      
+      {expanded ? (
+        <>
+          <div className="flex flex-wrap gap-2 ml-2 mr-2">
+            {filterOptions.years.map((year) => (
+              <button
+                key={year}
+                className={`flex items-center text-[10px] py-1 px-4 rounded-full border transition ${
+                  filters.year === year
+                    ? "bg-[#217fad] text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent parent div click
+                  handleFilterChange("year", year);
+                  // Removed setExpanded(false) to keep it open after selection
+                }}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+          <ChevronLeft className="text-gray-600 w-4 h-4 ml-auto" />
+        </>
+      ) : (
+        <ChevronRight className="text-gray-600 w-4 h-4" />
+      )}
+    </div>
 
       {/* Facility Type by Quarter Chart - Full Width */}
       <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-56 p-2">

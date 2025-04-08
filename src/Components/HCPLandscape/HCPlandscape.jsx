@@ -5,6 +5,7 @@ import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
+import api from '../api/api'
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -50,7 +51,7 @@ const HCPlandscape = () => {
       try {
         setIsLoading(true)
         // Fetch all data without year filter
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcplandscape")
+        const response = await fetch(`${api}/fetch-hcplandscape`)
         const jsonData = await response.json()
 
         // Extract unique years from the data, filtering out 2016 and 2025
@@ -290,19 +291,19 @@ const HCPlandscape = () => {
     // Format for chart
     const ageGroupData = segments.map((segment) => {
       const result = { segment }
-
+    
       // Map age groups to chart categories
       const ageMapping = {
         "0 to 2": "<2",
         "3 to 17": "3-17",
         "Above 18": ">18",
       }
-
+    
       // Initialize all age groups to 0
       Object.values(ageMapping).forEach((chartAge) => {
         result[chartAge] = 0
       })
-
+    
       // Fill in counts for each age group
       Object.entries(ageMapping).forEach(([apiAge, chartAge]) => {
         const key = `${segment}_${apiAge}`
@@ -310,14 +311,22 @@ const HCPlandscape = () => {
           result[chartAge] = segmentAgeHcpMap.get(key).size
         }
       })
-
+    
       // Calculate total for each segment
-      result.total = result["<2"] + result["3-17"] + result[">18"]
-
+      const total = result["<2"] + result["3-17"] + result[">18"]
+      result.total = total
+    
+      // Calculate percentage values for 100% stacked bar
+      if (total > 0) {
+        result["<2"] = ((result["<2"] / total) * 100).toFixed(2)
+        result["3-17"] = ((result["3-17"] / total) * 100).toFixed(2)
+        result[">18"] = ((result[">18"] / total) * 100).toFixed(2)
+      }
+    
       return result
     })
-
-    setHcpsplitAge(ageGroupData)
+    
+    setHcpsplitAge(ageGroupData)    
   }
 
   const processSpecialtyData = (data) => {
@@ -350,7 +359,7 @@ const HCPlandscape = () => {
     // Format for chart
     const specialtyData = segments.map((segment) => {
       const result = { segment }
-
+    
       // Define specialty categories for the chart
       const specialtyCategories = {
         PEDIATRIC: "Pediatric",
@@ -360,15 +369,15 @@ const HCPlandscape = () => {
         "NP/PA": "NP/PA",
         RADIOLOGY: "Radiology",
       }
-
+    
       // Initialize all specialty categories to 0
       Object.values(specialtyCategories).forEach((chartSpecialty) => {
         result[chartSpecialty] = 0
       })
-
+    
       // Add "All Others" category
       result["All Others"] = 0
-
+    
       // Fill in counts for each specialty
       Object.entries(specialtyCategories).forEach(([apiSpecialty, chartSpecialty]) => {
         const key = `${segment}_${apiSpecialty}`
@@ -376,7 +385,7 @@ const HCPlandscape = () => {
           result[chartSpecialty] = segmentSpecialtyHcpMap.get(key).size
         }
       })
-
+    
       // Count "All Others" - specialties not in our predefined categories
       segmentSpecialtyHcpMap.forEach((hcps, key) => {
         if (key.startsWith(`${segment}_`)) {
@@ -386,20 +395,31 @@ const HCPlandscape = () => {
           }
         }
       })
-
-      // Calculate total for each segment
-      result.total =
+    
+      // Calculate total for the segment
+      const total =
         result["Pediatric"] +
         result["Child Neurology"] +
         result["Neurology"] +
         result["Neuromuscular"] +
         result["NP/PA"] +
         result["All Others"]
-
+    
+      result.total = total
+    
+      // Convert to percentage for 100% stacked chart
+      if (total > 0) {
+        Object.keys(result).forEach((key) => {
+          if (key !== "segment" && key !== "total") {
+            result[key] = ((result[key] / total) * 100).toFixed(2)
+          }
+        })
+      }
+    
       return result
     })
-
-    setHcpsplitSpecialtyData(specialtyData)
+    
+    setHcpsplitSpecialtyData(specialtyData)    
   }
 
   const processPotentialData = (data) => {
@@ -819,14 +839,32 @@ const HCPlandscape = () => {
           <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20 }}>
             <BarChart data={hcpsplit_age}>
               <CartesianGrid strokeDasharray="3 3" />
+              
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
+              
+              <YAxis
+                tick={{ fontSize: 10 }}
+                domain={[0, 100]}
+                unit="%"
+                tickFormatter={(value) => Math.round(value)}
+              />
+              
+              <Tooltip
+                formatter={(value) => `${Math.round(value)}%`}
+                labelStyle={{ fontSize: 11 }}
+                itemStyle={{ fontSize: 10 }}
+              />
 
-              <Bar dataKey="<2" stackId="a" fill="#2c84b0" />
-              <Bar dataKey="3-17" stackId="a" fill="#8295ae" />
+              <Bar dataKey="<2" stackId="a" fill="#2c84b0">
+                <LabelList dataKey="<2" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+              </Bar>
+              
+              <Bar dataKey="3-17" stackId="a" fill="#8295ae">
+                <LabelList dataKey="3-17" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+              </Bar>
+              
               <Bar dataKey=">18" stackId="a" fill="#addaf0" radius={[10, 10, 0, 0]}>
-                <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" />
+                <LabelList dataKey=">18" position="insideTop" fontSize={9} fill="#333" formatter={(val) => `${Math.round(val)}%`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -867,22 +905,47 @@ const HCPlandscape = () => {
           </div>
 
           <ResponsiveContainer width="100%" height="100%" style={{ marginRight: -10, marginBottom: -20 }}>
-            <BarChart data={hcpsplit_specialty_data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
+  <BarChart data={hcpsplit_specialty_data}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+    <YAxis
+      tick={{ fontSize: 10 }}
+      domain={[0, 100]}
+      unit="%"
+      tickFormatter={(value) => Math.round(value)}
+    />
+    <Tooltip
+      contentStyle={{ fontSize: 10 }}
+      itemStyle={{ fontSize: 10 }}
+      formatter={(value) => `${Math.round(value)}%`}
+    />
 
-              <Bar dataKey="Pediatric" stackId="a" fill="#2c84b0" />
-              <Bar dataKey="Child Neurology" stackId="a" fill="#8295ae" />
-              <Bar dataKey="Neurology" stackId="a" fill="#addaf0" />
-              <Bar dataKey="Neuromuscular" stackId="a" fill="#e7caed" />
-              <Bar dataKey="NP/PA" stackId="a" fill="#bac8f5" />
-              <Bar dataKey="All Others" stackId="a" fill="#f5d6ba" radius={[10, 10, 0, 0]}>
-                <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+    <Bar dataKey="Pediatric" stackId="a" fill="#2c84b0">
+      <LabelList dataKey="Pediatric" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+
+    <Bar dataKey="Child Neurology" stackId="a" fill="#8295ae">
+      <LabelList dataKey="Child Neurology" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+
+    <Bar dataKey="Neurology" stackId="a" fill="#addaf0">
+      <LabelList dataKey="Neurology" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+
+    <Bar dataKey="Neuromuscular" stackId="a" fill="#e7caed">
+      <LabelList dataKey="Neuromuscular" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+
+    <Bar dataKey="NP/PA" stackId="a" fill="#bac8f5">
+      <LabelList dataKey="NP/PA" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+
+    <Bar dataKey="All Others" stackId="a" fill="#f5d6ba" radius={[10, 10, 0, 0]}>
+      <LabelList dataKey="All Others" position="insideTop" fontSize={9} fill="#333" formatter={(val) => `${Math.round(val)}%`} />
+    </Bar>
+  </BarChart>
+</ResponsiveContainer>
+
         </div>
       </div>
 

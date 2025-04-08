@@ -6,7 +6,7 @@ import PrescriberClusterChart from "./PrescriberChart"
 import HCOchart from "./HCOchart"
 import { useNavigate } from "react-router-dom"
 import USAMap from "./Map"
-import USAMap2 from "./Map2"
+import api from '../api/api'
 
 const Overview = () => {
   const navigate = useNavigate()
@@ -71,7 +71,7 @@ const Overview = () => {
         return
       }
 
-      const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-data")
+      const response = await fetch(`${api}/fetch-data`)
       const jsonData = await response.json()
 
       // Cache the data in sessionStorage
@@ -254,7 +254,7 @@ const Overview = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
