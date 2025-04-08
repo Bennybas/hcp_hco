@@ -270,7 +270,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Total HCPs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalHCPs}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalHCPs.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -279,7 +279,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Total Treated Patients</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalPatients}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalPatients.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -288,7 +288,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Treating HCPs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCPs}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCPs.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -297,7 +297,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Avg.Treated Patients per HCPs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCP}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCP.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -306,7 +306,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Referring HCPs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcpsReferringPatients}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcpsReferringPatients.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -315,7 +315,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Avg.Patients Referred per HCP</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsReferredPerHCP}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsReferredPerHCP.toLocaleString()}</span>
           </div>
         </div>
 
@@ -369,7 +369,12 @@ const Overview = () => {
             </span>
           </div>
         )} */}
+
+        <span className="text-[12px] text-gray-500 mt-2 italic">
+          Data source: KOMODO APLD Claims: Jan'17 to Dec'24
+        </span>
       </div>
+      
 
       <div className="flex flex-col w-[29%] gap-2">
         <div className="grid grid-cols-2 gap-2">
@@ -380,7 +385,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Total HCOs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalHCOs}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.totalHCOs.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -389,7 +394,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Prescribing HCOs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.zolgemsmaEver}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.zolgemsmaEver.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -398,7 +403,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Treating HCOs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCOs}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgTreatingHCOs.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -407,7 +412,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Avg.Treated Patients per HCOs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCO}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsPerHCO.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -416,7 +421,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Referring HCOs</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcosReferringPatients}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.hcosReferringPatients.toLocaleString()}</span>
           </div>
           <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
             <div className="flex gap-2 items-center">
@@ -425,7 +430,7 @@ const Overview = () => {
               </div>
               <span className="text-gray-500 text-[11px] font-[500]">Avg.Patients Referred per HCO</span>
             </div>
-            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsReferredPerHCO}</span>
+            <span className="text-gray-700 text-[16px] font-[500] pl-2">{metrics.avgPatientsReferredPerHCO.toLocaleString()}</span>
           </div>
         </div>
 
