@@ -260,6 +260,7 @@ const Overview = () => {
   }
 
   return (
+    <>
     <div className="flex gap-4 w-full p-2">
       <div className="flex flex-col w-[29%] gap-2">
         <div className="grid grid-cols-2 gap-2">
@@ -320,41 +321,9 @@ const Overview = () => {
         </div>
 
         <PrescriberClusterChart hcpData={filteredData} />
-
-        <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
-          <div className="flex gap-2 items-center p-2">
-            <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-              <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
-            </div>
-            <span className="text-gray-500 text-[11px] font-[500]">Top 10 HCPs by SMA Treated Patients Vol</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
-                  <th className="p-2 text-left">HCP Name</th>
-                  <th className="p-2 text-left">HCP ID</th>
-                  <th className="p-2 text-right">Treated pat. Vol</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.topHCPs.map((hcp, index) => (
-                  <tr key={index} className="border-t text-gray-800 text-[9px]">
-                    <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
-                      {hcp.name}
-                    </td>
-                    <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">{hcp.id}</td>
-                    <td className="p-2 text-right">{hcp.volume}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
-      <div className="flex flex-col w-[42%] mt-[4rem]">
+      <div className="flex flex-col w-[42%] ">
         <USAMap onStateSelect={handleStateSelect} />
         {/* {selectedState && (
           <div className="mt-2 p-2 bg-blue-50 rounded-md text-center">
@@ -370,9 +339,7 @@ const Overview = () => {
           </div>
         )} */}
 
-        <span className="text-[12px] text-gray-500 mt-2 italic">
-          Data source: KOMODO APLD Claims: Jan'17 to Dec'24
-        </span>
+        
       </div>
       
 
@@ -436,6 +403,44 @@ const Overview = () => {
 
         <HCOchart HCOdata={filteredData} />
 
+        
+      </div> 
+    </div>
+
+    <div className="flex w-full gap-4 p-2">
+      <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
+          <div className="flex gap-2 items-center p-2">
+            <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+              <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+            </div>
+            <span className="text-gray-500 text-[11px] font-[500]">Top 10 HCPs by SMA Treated Patients Vol</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
+                  <th className="p-2 text-left">HCP Name</th>
+                  <th className="p-2 text-left">HCP NPI</th>
+                  <th className="p-2 text-right">Treated pat. Vol</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.topHCPs.map((hcp, index) => (
+                  <tr key={index} className="border-t text-gray-800 text-[9px]">
+                    <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
+                      {hcp.name}
+                    </td>
+                    <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">{hcp.id}</td>
+                    <td className="p-2 text-right">{hcp.volume}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
         <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
           <div className="flex gap-2 items-center p-2">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
@@ -467,8 +472,13 @@ const Overview = () => {
             </table>
           </div>
         </div>
-      </div>
+
     </div>
+      <span className="text-[10px] text-gray-500 mt-2 italic">
+          Data source:<span className="text-[10px] font-[500] text-gray-500 mt-2 italic"> KOMODO APLD Claims: Jan'17 to Dec'24</span>
+        </span>
+      
+    </>
   )
 }
 

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, X } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
-import api from '../api/api'
+import api from "../api/api"
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -30,16 +30,19 @@ const HCPlandscape = () => {
 
   // Filters
   const [filters, setFilters] = useState({
-    year: "All", // Default to All years
-    brand: "All",
-    age: "All",
+    years: [], // Changed to array for multi-select
+    brands: [], // Changed to array for multi-select
+    ages: [], // Changed to array for multi-select
+    selectedQuarter: null, // For quarter filtering
+    selectedYear: null, // For year filtering
+    segment: null, // For segment filtering
   })
 
   // Filter options
   const [filterOptions, setFilterOptions] = useState({
-    years: ["All"],
-    brands: ["All"],
-    ages: ["All"],
+    years: [],
+    brands: [],
+    ages: [],
   })
 
   // Dropdown state
@@ -62,7 +65,7 @@ const HCPlandscape = () => {
         // Update filter options with available years
         setFilterOptions((prev) => ({
           ...prev,
-          years: ["All", ...years],
+          years: years,
         }))
 
         // Set the data
@@ -97,14 +100,30 @@ const HCPlandscape = () => {
 
   const getFilteredData = () => {
     return data.filter((item) => {
-      // Year filter
-      if (filters.year !== "All" && item.year !== filters.year) return false
+      // Year filter - check if any selected years match or if no years are selected
+      if (filters.years.length > 0 && !filters.years.includes(item.year)) return false
 
-      // Brand filter
-      if (filters.brand !== "All" && item.drug_name !== filters.brand) return false
+      // Brand filter - check if any selected brands match or if no brands are selected
+      if (filters.brands.length > 0 && !filters.brands.includes(item.drug_name)) return false
 
-      // Age filter
-      if (filters.age !== "All" && item.age_group !== filters.age) return false
+      // Age filter - check if any selected ages match or if no ages are selected
+      if (filters.ages.length > 0 && !filters.ages.includes(item.age_group)) return false
+
+      // Quarter and Year filter - this is the fixed part
+      if (filters.selectedQuarter !== null && filters.selectedYear !== null) {
+        // Convert to string for comparison since API data might have string values
+        const itemYear = String(item.year)
+        const itemQuarter = String(item.quarter)
+        const filterYear = String(filters.selectedYear)
+        const filterQuarter = String(filters.selectedQuarter)
+
+        if (itemYear !== filterYear || itemQuarter !== filterQuarter) {
+          return false
+        }
+      }
+
+      // Segment filter
+      if (filters.segment && item.hcp_segment !== filters.segment) return false
 
       return true
     })
@@ -112,8 +131,8 @@ const HCPlandscape = () => {
 
   const extractFilterOptions = (data) => {
     // Extract unique brands and age groups
-    const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
-    const ages = ["All", ...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
+    const brands = [...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
+    const ages = [...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
 
     // Get years but filter out 2016 and 2025
     const years = [...new Set(data.map((item) => item.year))]
@@ -122,7 +141,7 @@ const HCPlandscape = () => {
 
     setFilterOptions((prev) => ({
       ...prev,
-      years: ["All", ...years],
+      years: years,
       brands,
       ages,
     }))
@@ -289,21 +308,21 @@ const HCPlandscape = () => {
     })
 
     // Format for chart
-    const ageGroupData = segments.map((segment) => {
+    let ageGroupData = segments.map((segment) => {
       const result = { segment }
-    
+
       // Map age groups to chart categories
       const ageMapping = {
         "0 to 2": "<2",
         "3 to 17": "3-17",
         "Above 18": ">18",
       }
-    
+
       // Initialize all age groups to 0
       Object.values(ageMapping).forEach((chartAge) => {
         result[chartAge] = 0
       })
-    
+
       // Fill in counts for each age group
       Object.entries(ageMapping).forEach(([apiAge, chartAge]) => {
         const key = `${segment}_${apiAge}`
@@ -311,22 +330,31 @@ const HCPlandscape = () => {
           result[chartAge] = segmentAgeHcpMap.get(key).size
         }
       })
-    
+
       // Calculate total for each segment
       const total = result["<2"] + result["3-17"] + result[">18"]
       result.total = total
-    
+
       // Calculate percentage values for 100% stacked bar
       if (total > 0) {
         result["<2"] = ((result["<2"] / total) * 100).toFixed(2)
         result["3-17"] = ((result["3-17"] / total) * 100).toFixed(2)
         result[">18"] = ((result[">18"] / total) * 100).toFixed(2)
       }
-    
+
       return result
     })
-    
-    setHcpsplitAge(ageGroupData)    
+
+    // Sort segments in the correct order: HIGH, MEDIUM, LOW, V-LOW
+    const segmentOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3 }
+
+    ageGroupData = ageGroupData.sort((a, b) => {
+      const orderA = segmentOrder[a.segment] !== undefined ? segmentOrder[a.segment] : 999
+      const orderB = segmentOrder[b.segment] !== undefined ? segmentOrder[b.segment] : 999
+      return orderA - orderB
+    })
+
+    setHcpsplitAge(ageGroupData)
   }
 
   const processSpecialtyData = (data) => {
@@ -357,9 +385,9 @@ const HCPlandscape = () => {
     })
 
     // Format for chart
-    const specialtyData = segments.map((segment) => {
+    let specialtyData = segments.map((segment) => {
       const result = { segment }
-    
+
       // Define specialty categories for the chart
       const specialtyCategories = {
         PEDIATRIC: "Pediatric",
@@ -369,15 +397,15 @@ const HCPlandscape = () => {
         "NP/PA": "NP/PA",
         RADIOLOGY: "Radiology",
       }
-    
+
       // Initialize all specialty categories to 0
       Object.values(specialtyCategories).forEach((chartSpecialty) => {
         result[chartSpecialty] = 0
       })
-    
+
       // Add "All Others" category
       result["All Others"] = 0
-    
+
       // Fill in counts for each specialty
       Object.entries(specialtyCategories).forEach(([apiSpecialty, chartSpecialty]) => {
         const key = `${segment}_${apiSpecialty}`
@@ -385,7 +413,7 @@ const HCPlandscape = () => {
           result[chartSpecialty] = segmentSpecialtyHcpMap.get(key).size
         }
       })
-    
+
       // Count "All Others" - specialties not in our predefined categories
       segmentSpecialtyHcpMap.forEach((hcps, key) => {
         if (key.startsWith(`${segment}_`)) {
@@ -395,7 +423,7 @@ const HCPlandscape = () => {
           }
         }
       })
-    
+
       // Calculate total for the segment
       const total =
         result["Pediatric"] +
@@ -404,9 +432,9 @@ const HCPlandscape = () => {
         result["Neuromuscular"] +
         result["NP/PA"] +
         result["All Others"]
-    
+
       result.total = total
-    
+
       // Convert to percentage for 100% stacked chart
       if (total > 0) {
         Object.keys(result).forEach((key) => {
@@ -415,11 +443,20 @@ const HCPlandscape = () => {
           }
         })
       }
-    
+
       return result
     })
-    
-    setHcpsplitSpecialtyData(specialtyData)    
+
+    // Sort segments in the correct order: HIGH, MEDIUM, LOW, V-LOW
+    const segmentOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3 }
+
+    specialtyData = specialtyData.sort((a, b) => {
+      const orderA = segmentOrder[a.segment] !== undefined ? segmentOrder[a.segment] : 999
+      const orderB = segmentOrder[b.segment] !== undefined ? segmentOrder[b.segment] : 999
+      return orderA - orderB
+    })
+
+    setHcpsplitSpecialtyData(specialtyData)
   }
 
   const processPotentialData = (data) => {
@@ -464,6 +501,7 @@ const HCPlandscape = () => {
       label: labelMap[segment] || segment,
       value: hcpSet.size,
       color: colorMap[segment] || "#000000",
+      segment: segment, // Store original segment for filtering
     }))
 
     // Sort by predefined order: High, Moderate, Low, V. Low
@@ -537,18 +575,72 @@ const HCPlandscape = () => {
     setTableData(data.slice(startIndex, endIndex))
   }
 
-  // Handle filter changes
+  // Handle filter changes for multi-select
   const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }))
+    setFilters((prev) => {
+      const newFilters = { ...prev }
+
+      // Handle multi-select filters (years, brands, ages)
+      if (filterName === "years" || filterName === "brands" || filterName === "ages") {
+        const currentValues = [...prev[filterName]]
+        const valueIndex = currentValues.indexOf(value)
+
+        if (valueIndex === -1) {
+          // Add value if not present
+          currentValues.push(value)
+        } else {
+          // Remove value if already present
+          currentValues.splice(valueIndex, 1)
+        }
+
+        newFilters[filterName] = currentValues
+      } else {
+        // Handle single-select filters
+        newFilters[filterName] = value
+      }
+
+      return newFilters
+    })
 
     // Reset to first page when filters change
     setCurrentPage(1)
+  }
 
-    // Close dropdown after selection
-    setOpenDropdown(null)
+  // Handle bar click for QoQ Patients By Brand chart
+  const handleBrandBarClick = (data) => {
+    // Extract year and quarter from the clicked bar
+    const year = data.year
+    const quarterMatch = data.quarter.match(/Q(\d+)/)
+    const quarter = quarterMatch ? quarterMatch[1] : null
+
+    if (year && quarter) {
+      setFilters((prev) => ({
+        ...prev,
+        selectedYear: year,
+        selectedQuarter: quarter,
+      }))
+    }
+  }
+
+  // Handle bar click for segment charts
+  const handleSegmentBarClick = (data) => {
+    // Filter by segment
+    setFilters((prev) => ({
+      ...prev,
+      segment: data.segment,
+    }))
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({
+      years: [],
+      brands: [],
+      ages: [],
+      selectedQuarter: null,
+      selectedYear: null,
+      segment: null,
+    })
   }
 
   // Toggle dropdown
@@ -598,6 +690,17 @@ const HCPlandscape = () => {
     return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i)
   }
 
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return (
+      filters.years.length > 0 ||
+      filters.brands.length > 0 ||
+      filters.ages.length > 0 ||
+      filters.selectedQuarter !== null ||
+      filters.segment !== null
+    )
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -608,87 +711,147 @@ const HCPlandscape = () => {
 
   return (
     <div className="flex flex-col gap-4 w-full p-2">
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
-        {/* Year Filter */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[100px]"
-            onClick={() => toggleDropdown("year")}
-          >
-            <span className="text-[12px] text-gray-600">Year: {filters.year}</span>
-            <ChevronDown className="w-4 h-4" />
+      {/* Filters and Clear Button */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-4 items-center flex-wrap">
+          {/* Year Filter */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[100px]"
+              onClick={() => toggleDropdown("year")}
+            >
+              <span className="text-[12px] text-gray-600">
+                Year: {filters.years.length > 0 ? filters.years.join(", ") : "All"}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "year" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.years.map((year) => (
+                  <div
+                    key={year}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("years", year)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filters.years.includes(year)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    {year}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {openDropdown === "year" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.years.map((year) => (
-                <div
-                  key={year}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.year === year ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("year", year)}
-                >
-                  {year}
-                </div>
-              ))}
+
+          {/* Brand Filter */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("brand")}
+            >
+              <span className="text-[12px] text-gray-600">
+                Brand: {filters.brands.length > 0 ? filters.brands.join(", ") : "All"}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "brand" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.brands.map((brand) => (
+                  <div
+                    key={brand}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("brands", brand)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filters.brands.includes(brand)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    {brand}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Age Filter */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("age")}
+            >
+              <span className="text-[12px] text-gray-600">
+                Age: {filters.ages.length > 0 ? filters.ages.join(", ") : "All"}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "age" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.ages.map((age) => (
+                  <div
+                    key={age}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("ages", age)
+                    }}
+                  >
+                    <input type="checkbox" checked={filters.ages.includes(age)} onChange={() => {}} className="mr-2" />
+                    {age}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active Filters Display */}
+          {filters.selectedQuarter !== null && filters.selectedYear !== null && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              Quarter: {filters.selectedYear}-Q{filters.selectedQuarter}
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, selectedQuarter: null, selectedYear: null }))}
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {filters.segment && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              Segment: {filters.segment}
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, segment: null }))}
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
             </div>
           )}
         </div>
 
-        {/* Brand Filter */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white  justify-between cursor-pointer min-w-[120px]"
-            onClick={() => toggleDropdown("brand")}
+        {/* Clear All Filters Button */}
+        {hasActiveFilters() && (
+          <button
+            onClick={clearAllFilters}
+            className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
           >
-            <span className="text-[12px] text-gray-600">Brand: {filters.brand}</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "brand" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.brands.map((brand) => (
-                <div
-                  key={brand}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.brand === brand ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("brand", brand)}
-                >
-                  {brand}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Age Filter */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg  bg-white justify-between cursor-pointer min-w-[120px]"
-            onClick={() => toggleDropdown("age")}
-          >
-            <span className="text-[12px] text-gray-600">Age: {filters.age}</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "age" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full">
-              {filterOptions.ages.map((age) => (
-                <div
-                  key={age}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.age === age ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("age", age)}
-                >
-                  {age}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            <X size={14} />
+            Clear Filters
+          </button>
+        )}
       </div>
-      <div></div>
+
       {/* KPI Cards */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -780,11 +943,28 @@ const HCPlandscape = () => {
               tickFormatter={(value) => value}
             />
             <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(value) =>`${value}`} labelStyle={{ fontSize: 11 }}
-                itemStyle={{ fontSize: 10 }}/>
-            <Bar dataKey="Zolgensma" stackId="a" fill="#8E58B3" />
-            <Bar dataKey="Spinraza" stackId="a" fill="#2A9FB0" />
-            <Bar dataKey="Evrysdi" stackId="a" fill="#D50057">
+            <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
+            <Bar
+              dataKey="Zolgensma"
+              stackId="a"
+              fill="#8E58B3"
+              onClick={(data) => handleBrandBarClick(data)}
+              cursor="pointer"
+            />
+            <Bar
+              dataKey="Spinraza"
+              stackId="a"
+              fill="#2A9FB0"
+              onClick={(data) => handleBrandBarClick(data)}
+              cursor="pointer"
+            />
+            <Bar
+              dataKey="Evrysdi"
+              stackId="a"
+              fill="#D50057"
+              onClick={(data) => handleBrandBarClick(data)}
+              cursor="pointer"
+            >
               <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
             </Bar>
           </BarChart>
@@ -797,7 +977,11 @@ const HCPlandscape = () => {
           <span className="text-gray-500 text-[11px] font-[500] pb-4">HCP segment by SMA patient Potential</span>
           <div className="flex flex-col space-y-3 flex-grow justify-around pr-2">
             {potential_data.map((item, index) => (
-              <div key={index} className="flex flex-col items-center w-full">
+              <div
+                key={index}
+                className="flex flex-col items-center w-full cursor-pointer"
+                onClick={() => handleFilterChange("segment", item.segment)}
+              >
                 <div className="flex items-center w-full">
                   <span className="text-gray-500 text-[10px] w-[120px] shrink-0 mr-2">{item.label}</span>
                 </div>
@@ -840,32 +1024,64 @@ const HCPlandscape = () => {
           <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20 }}>
             <BarChart data={hcpsplit_age}>
               <CartesianGrid strokeDasharray="3 3" />
-              
+
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
-              
-              <YAxis
-                tick={{ fontSize: 10 }}
-                domain={[0, 100]}
-                unit="%"
-                tickFormatter={(value) => Math.round(value)}
-              />
-              
+
+              <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
+
               <Tooltip
                 formatter={(value) => `${Math.round(value)}%`}
                 labelStyle={{ fontSize: 11 }}
                 itemStyle={{ fontSize: 10 }}
               />
 
-              <Bar dataKey="<2" stackId="a" fill="#2c84b0">
-                <LabelList dataKey="<2" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+              <Bar
+                dataKey="<2"
+                stackId="a"
+                fill="#2c84b0"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="<2"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
               </Bar>
-              
-              <Bar dataKey="3-17" stackId="a" fill="#8295ae">
-                <LabelList dataKey="3-17" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
+
+              <Bar
+                dataKey="3-17"
+                stackId="a"
+                fill="#8295ae"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="3-17"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
               </Bar>
-              
-              <Bar dataKey=">18" stackId="a" fill="#addaf0" radius={[10, 10, 0, 0]}>
-                <LabelList dataKey=">18" position="insideTop" fontSize={9} fill="#333" formatter={(val) => `${Math.round(val)}%`} />
+
+              <Bar
+                dataKey=">18"
+                stackId="a"
+                fill="#addaf0"
+                radius={[10, 10, 0, 0]}
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey=">18"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#333"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -906,47 +1122,114 @@ const HCPlandscape = () => {
           </div>
 
           <ResponsiveContainer width="100%" height="100%" style={{ marginRight: -10, marginBottom: -20 }}>
-  <BarChart data={hcpsplit_specialty_data}>
-    <CartesianGrid strokeDasharray="3 3" />
-    <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
-    <YAxis
-      tick={{ fontSize: 10 }}
-      domain={[0, 100]}
-      unit="%"
-      tickFormatter={(value) => Math.round(value)}
-    />
-    <Tooltip
-      contentStyle={{ fontSize: 10 }}
-      itemStyle={{ fontSize: 10 }}
-      formatter={(value) => `${Math.round(value)}%`}
-    />
+            <BarChart data={hcpsplit_specialty_data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
+              <Tooltip
+                contentStyle={{ fontSize: 10 }}
+                itemStyle={{ fontSize: 10 }}
+                formatter={(value) => `${Math.round(value)}%`}
+              />
 
-    <Bar dataKey="Pediatric" stackId="a" fill="#2c84b0">
-      <LabelList dataKey="Pediatric" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
+              <Bar
+                dataKey="Pediatric"
+                stackId="a"
+                fill="#2c84b0"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="Pediatric"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
 
-    <Bar dataKey="Child Neurology" stackId="a" fill="#8295ae">
-      <LabelList dataKey="Child Neurology" position="insideTop" fontSize={9} fill="#fff" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
+              <Bar
+                dataKey="Child Neurology"
+                stackId="a"
+                fill="#8295ae"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="Child Neurology"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
 
-    <Bar dataKey="Neurology" stackId="a" fill="#addaf0">
-      <LabelList dataKey="Neurology" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
+              <Bar
+                dataKey="Neurology"
+                stackId="a"
+                fill="#addaf0"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="Neurology"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#000"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
 
-    <Bar dataKey="Neuromuscular" stackId="a" fill="#e7caed">
-      <LabelList dataKey="Neuromuscular" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
+              <Bar
+                dataKey="Neuromuscular"
+                stackId="a"
+                fill="#e7caed"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="Neuromuscular"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#000"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
 
-    <Bar dataKey="NP/PA" stackId="a" fill="#bac8f5">
-      <LabelList dataKey="NP/PA" position="insideTop" fontSize={9} fill="#000" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
+              <Bar
+                dataKey="NP/PA"
+                stackId="a"
+                fill="#bac8f5"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="NP/PA"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#000"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
 
-    <Bar dataKey="All Others" stackId="a" fill="#f5d6ba" radius={[10, 10, 0, 0]}>
-      <LabelList dataKey="All Others" position="insideTop" fontSize={9} fill="#333" formatter={(val) => `${Math.round(val)}%`} />
-    </Bar>
-  </BarChart>
-</ResponsiveContainer>
-
+              <Bar
+                dataKey="All Others"
+                stackId="a"
+                fill="#f5d6ba"
+                radius={[10, 10, 0, 0]}
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="All Others"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#333"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -991,7 +1274,9 @@ const HCPlandscape = () => {
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
                   <td className="p-2">{hcp.Rank}</td>
-                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">{hcp["HCP ID"]}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
+                    {hcp["HCP ID"]}
+                  </td>
                   <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
                     {hcp["HCP Name"]}
                   </td>
