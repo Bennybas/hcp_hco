@@ -65,13 +65,12 @@ const stateAbbreviationToName = {
   DC: "District of Columbia",
 }
 
-// State names to abbreviations mapping
 const stateNameToAbbreviation = Object.entries(stateAbbreviationToName).reduce((acc, [abbr, name]) => {
   acc[name] = abbr
   return acc
 }, {})
 
-// Color ranges for the choropleth map
+
 const COLOR_RANGE = [
   "#f7fbff", // Lightest
   "#e3eef9",
@@ -262,11 +261,11 @@ const USAMap = ({ onStateSelect }) => {
 
       // Fix: Ensure we're getting the correct HCO name
       // Log the record to see what fields are available
-      console.log("Record HCO name fields:", {
-        hco_mdm_name: record.hco_mdm_name,
-        hco_name: record.hco_name,
-        hco_grouping: record.hco_grouping,
-      })
+      // console.log("Record HCO name fields:", {
+      //   hco_mdm_name: record.hco_mdm_name,
+      //   hco_name: record.hco_name,
+      //   hco_grouping: record.hco_grouping,
+      // })
 
       // Use a more robust fallback chain for HCO name
       const hcoName = record.hco_mdm_name || record.hco_name || "Healthcare Organization"

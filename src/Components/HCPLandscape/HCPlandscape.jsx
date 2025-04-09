@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
+import { BarChart, Bar, Cell,XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 
@@ -159,11 +159,7 @@ const HCPlandscape = () => {
 
     // Process specialty data
     processSpecialtyData(data)
-
-    // Process potential data
     processPotentialData(data)
-
-    // Process table data
     processTableData(data)
   }
 
@@ -973,36 +969,44 @@ const HCPlandscape = () => {
 
       {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-56 p-2">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-72 p-2">
           <span className="text-gray-500 text-[11px] font-[500] pb-4">HCP segment by SMA patient Potential</span>
-          <div className="flex flex-col space-y-3 flex-grow justify-around pr-2">
-            {potential_data.map((item, index) => (
-              <div
-                key={index}
-                className="flex flex-col items-center w-full cursor-pointer"
-                onClick={() => handleFilterChange("segment", item.segment)}
-              >
-                <div className="flex items-center w-full">
-                  <span className="text-gray-500 text-[10px] w-[120px] shrink-0 mr-2">{item.label}</span>
-                </div>
-                <div className="flex items-center w-full">
-                  <div className="flex-grow bg-gray-100 rounded-full h-[6px] mr-2">
-                    <div
-                      className="h-[6px] rounded-full"
-                      style={{
-                        width: `${(item.value / maxValue) * 100}%`,
-                        backgroundColor: item.color,
-                      }}
-                    ></div>
-                  </div>
-                  <span className="text-gray-600 text-[10px] font-medium w-[20px] text-right">{item.value}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col w-full h-64 p-2">
+          <div className="flex-grow">
+              {potential_data.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={potential_data}
+                    margin={{ top: 10, right: 20, left: -20, bottom: 10 }}
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="label" type="category" width={80} tick={{ fontSize: 10 }} />
+                    <Tooltip
+                      cursor={{ fill: '#f0f0f0' }}
+                      wrapperStyle={{ fontSize: '10px' }}
+                      formatter={(value) => [value, 'Value']}
+                    />
+                    <Bar dataKey="value" radius={[0, 10, 10, 0]}>
+                      {potential_data.map((item, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill='#217fad'
+                          cursor="pointer"
+                          onClick={() => handleFilterChange("segment", item.segment)}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-sm text-gray-500 text-center pt-4">No data available</div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-56 p-2">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-72 p-2">
           <div className="flex gap-2 items-center justify-between w-full pb-4">
             <span className="text-gray-500 text-[11px] font-[500]">HCP Split by Segment and Age Group</span>
             <div className="flex gap-2 items-center">
@@ -1021,7 +1025,7 @@ const HCPlandscape = () => {
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20 }}>
+          <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20,marginTop:20 }}>
             <BarChart data={hcpsplit_age}>
               <CartesianGrid strokeDasharray="3 3" />
 
@@ -1087,7 +1091,7 @@ const HCPlandscape = () => {
           </ResponsiveContainer>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-56 p-2">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-72 p-2">
           <div className="flex gap-4 items-center justify-between w-full pb-4">
             <div>
               <span className="text-gray-500 text-[11px] font-[500] text-wrap">HCP Split by Segment and Specialty</span>
@@ -1121,7 +1125,7 @@ const HCPlandscape = () => {
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height="100%" style={{ marginRight: -10, marginBottom: -20 }}>
+          <ResponsiveContainer width="100%" height="110%" style={{ marginRight: -10, marginBottom: -20,marginTop:-10 }}>
             <BarChart data={hcpsplit_specialty_data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
