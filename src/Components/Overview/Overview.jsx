@@ -156,22 +156,36 @@ const Overview = () => {
     const hcpPatientMap = new Map()
     const hcpIdToNameMap = new Map()
     const hcpIdToSpecialityMap = new Map()
+    const hcpKOLMap = new Map() 
 
-    // Process rendering HCPs with state filter
     renderingHcps.forEach((item) => {
       if (item.hcp_id && item.hcp_id !== "-") {
         if (!hcpPatientMap.has(item.hcp_id)) {
           hcpPatientMap.set(item.hcp_id, new Set())
           hcpIdToNameMap.set(item.hcp_id, item.hcp_name)
-          // Initialize with the specialty from the first occurrence
+
+          // Set specialty if available
           if (item.final_spec && item.final_spec !== "-") {
             hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
           }
-        } else if (!hcpIdToSpecialityMap.has(item.hcp_id) && item.final_spec && item.final_spec !== "-") {
-          // If we already have this HCP but no specialty yet, add it
-          hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
+
+          // Set KOL value (only once since it's unique per hcp_id)
+          if (item.kol && item.kol !== "-") {
+            hcpKOLMap.set(item.hcp_id, item.kol.toUpperCase()) // normalize to "yes" or "no"
+          }
+        } else {
+          // Fallback: Add specialty if missing
+          if (!hcpIdToSpecialityMap.has(item.hcp_id) && item.final_spec && item.final_spec !== "-") {
+            hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
+          }
+
+          // Optional: If KOL isn't already set and exists on this item
+          if (!hcpKOLMap.has(item.hcp_id) && item.kol && item.kol !== "-") {
+            hcpKOLMap.set(item.hcp_id, item.kol.toLowerCase())
+          }
         }
 
+        // Add patient ID
         if (item.patient_id && item.patient_id !== "-") {
           hcpPatientMap.get(item.hcp_id).add(item.patient_id)
         }
@@ -182,6 +196,7 @@ const Overview = () => {
     const hcoPatientMap = new Map()
     const hcoIdToNameMap = new Map()
     const hcoIdToGroupingMap = new Map()
+  
 
     // Process rendering HCOs with state filter
     renderingHcos.forEach((item) => {
@@ -241,6 +256,7 @@ const Overview = () => {
         name: hcpIdToNameMap.get(hcpId) || `HCP ${hcpId}`,
         volume: patients.size,
         speciality: hcpIdToSpecialityMap.get(hcpId) || "Unknown",
+        kol:hcpKOLMap.get(hcpId)
       }
     })
 
@@ -402,7 +418,7 @@ const Overview = () => {
 
         <div className="flex flex-col w-[42%] ">
           <USAMap onStateSelect={handleStateSelect} />
-          {selectedState && (
+          {/* {selectedState && (
             <div className="mt-2 p-2 bg-blue-50 rounded-md text-center">
               <span className="text-sm font-medium">
                 Showing data for: <span className="text-blue-700">{ABBR_TO_STATE[selectedState]}</span>
@@ -414,7 +430,7 @@ const Overview = () => {
                 </button>
               </span>
             </div>
-          )}
+          )} */}
         </div>
 
         <div className="flex flex-col w-[29%] gap-2">
@@ -490,7 +506,7 @@ const Overview = () => {
       </div>
 
       <div className="flex w-full gap-4 p-2">
-        <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
+        <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-[50%] shadow-sm">
           <div className="flex gap-2 items-center p-2">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
@@ -502,9 +518,11 @@ const Overview = () => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
-                  <th className="p-2 text-left">HCP Name</th>
+                  
                   <th className="p-2 text-left">HCP NPI</th>
+                  <th className="p-2 text-left">HCP Name</th>
                   <th className="p-2 text-left">HCP Speciality</th>
+                  <th className="p-2 text-left">KOL Flag</th>
                   <th className="p-2 text-right">Treated pat. Vol</th>
                 </tr>
               </thead>
@@ -512,13 +530,15 @@ const Overview = () => {
                 {metrics.topHCPs.length > 0 ? (
                   metrics.topHCPs.map((hcp, index) => (
                     <tr key={index} className="border-t text-gray-800 text-[9px]">
-                      <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
-                        {hcp.name}
-                      </td>
+                     
                       <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
                         {hcp.id}
                       </td>
+                      <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
+                        {hcp.name}
+                      </td>
                       <td className="p-2">{hcp.speciality}</td>
+                      <td className="p-2">{hcp.kol}</td>
                       <td className="p-2 text-right">{hcp.volume}</td>
                     </tr>
                   ))
@@ -534,7 +554,7 @@ const Overview = () => {
           </div>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-full shadow-sm">
+        <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-[50%]  shadow-sm">
           <div className="flex gap-2 items-center p-2">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
@@ -546,9 +566,11 @@ const Overview = () => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
+                <th className="p-2 text-left">HCO MDM ID</th>
                   <th className="p-2 text-left">HCO Name</th>
-                  <th className="p-2 text-left">HCO MDM</th>
+                 
                   <th className="p-2 text-left">HCO Grouping</th>
+                  <th className="p-2 text-left">HCO Archytype</th>
                   <th className="p-2 text-right">Treated pat. Vol</th>
                 </tr>
               </thead>
@@ -556,13 +578,15 @@ const Overview = () => {
                 {metrics.topHCOs.length > 0 ? (
                   metrics.topHCOs.map((hco, index) => (
                     <tr key={index} className="border-t text-gray-800 text-[9px]">
-                      <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">
-                        {hco.name}
-                      </td>
+                     
                       <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">
                         {hco.id}
                       </td>
+                      <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">
+                        {hco.name}
+                      </td>
                       <td className="p-2">{hco.grouping}</td>
+                      <td className="p-2"></td>
                       <td className="p-2 text-right">{hco.volume}</td>
                     </tr>
                   ))

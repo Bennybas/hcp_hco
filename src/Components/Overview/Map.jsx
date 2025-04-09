@@ -1109,7 +1109,7 @@ const USAMap = ({ onStateSelect }) => {
             </div>
             <div className="flex items-center">
               <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["Unspecified"] }}></div>
-              <span className="text-[8px]">Unspecified</span>
+              <span className="text-[8px]">UNSPECIFIED</span>
             </div>
           </div>
         </div>

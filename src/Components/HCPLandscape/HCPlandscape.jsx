@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
-import { BarChart, Bar, Cell,XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 
@@ -33,6 +33,7 @@ const HCPlandscape = () => {
     years: [], // Changed to array for multi-select
     brands: [], // Changed to array for multi-select
     ages: [], // Changed to array for multi-select
+    states: [], // Added state filter
     selectedQuarter: null, // For quarter filtering
     selectedYear: null, // For year filtering
     segment: null, // For segment filtering
@@ -43,6 +44,7 @@ const HCPlandscape = () => {
     years: [],
     brands: [],
     ages: [],
+    states: [], // Added state options
   })
 
   // Dropdown state
@@ -109,6 +111,17 @@ const HCPlandscape = () => {
       // Age filter - check if any selected ages match or if no ages are selected
       if (filters.ages.length > 0 && !filters.ages.includes(item.age_group)) return false
 
+      // State filter - check if any selected states match either hcp_state or ref_hcp_state
+      if (filters.states.length > 0) {
+        const hcpState = item.hcp_state || ""
+        const refHcpState = item.ref_hcp_state || ""
+
+        // If neither state matches any of the selected states, filter out this item
+        if (!filters.states.some((state) => state === hcpState || state === refHcpState)) {
+          return false
+        }
+      }
+
       // Quarter and Year filter - this is the fixed part
       if (filters.selectedQuarter !== null && filters.selectedYear !== null) {
         // Convert to string for comparison since API data might have string values
@@ -139,11 +152,18 @@ const HCPlandscape = () => {
       .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
       .sort((a, b) => b - a) // Sort years in descending order
 
+    // Extract unique states from both hcp_state and ref_hcp_state
+    const hcpStates = new Set(data.map((item) => item.hcp_state).filter((state) => state && state !== "-"))
+    const refHcpStates = new Set(data.map((item) => item.ref_hcp_state).filter((state) => state && state !== "-"))
+    const allStates = [...hcpStates, ...refHcpStates]
+    const uniqueStates = [...new Set(allStates)].sort()
+
     setFilterOptions((prev) => ({
       ...prev,
       years: years,
       brands,
       ages,
+      states: uniqueStates,
     }))
   }
 
@@ -427,6 +447,7 @@ const HCPlandscape = () => {
         result["Neurology"] +
         result["Neuromuscular"] +
         result["NP/PA"] +
+        result["Radiology"] +
         result["All Others"]
 
       result.total = total
@@ -435,7 +456,7 @@ const HCPlandscape = () => {
       if (total > 0) {
         Object.keys(result).forEach((key) => {
           if (key !== "segment" && key !== "total") {
-            result[key] = ((result[key] / total) * 100).toFixed(2)
+            result[key] = Number.parseFloat(((result[key] / total) * 100).toFixed(2))
           }
         })
       }
@@ -529,6 +550,7 @@ const HCPlandscape = () => {
             Specialty: item.final_spec,
             "Affiliated Accounts": item.hco_mdm_name,
             "HCP Segment": item.hcp_segment,
+            State: item.hcp_state || "-", // Add state information
           }
           hcpPatientCounts[item.rend_npi] = new Set()
         }
@@ -576,8 +598,8 @@ const HCPlandscape = () => {
     setFilters((prev) => {
       const newFilters = { ...prev }
 
-      // Handle multi-select filters (years, brands, ages)
-      if (filterName === "years" || filterName === "brands" || filterName === "ages") {
+      // Handle multi-select filters (years, brands, ages, states)
+      if (filterName === "years" || filterName === "brands" || filterName === "ages" || filterName === "states") {
         const currentValues = [...prev[filterName]]
         const valueIndex = currentValues.indexOf(value)
 
@@ -633,6 +655,7 @@ const HCPlandscape = () => {
       years: [],
       brands: [],
       ages: [],
+      states: [],
       selectedQuarter: null,
       selectedYear: null,
       segment: null,
@@ -692,6 +715,7 @@ const HCPlandscape = () => {
       filters.years.length > 0 ||
       filters.brands.length > 0 ||
       filters.ages.length > 0 ||
+      filters.states.length > 0 ||
       filters.selectedQuarter !== null ||
       filters.segment !== null
     )
@@ -710,6 +734,41 @@ const HCPlandscape = () => {
       {/* Filters and Clear Button */}
       <div className="flex justify-between items-center">
         <div className="flex gap-4 items-center flex-wrap">
+          {/* State Filter - Added new filter */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("state")}
+            >
+              <span className="text-[12px] text-gray-600">
+                State: {filters.states.length > 0 ? filters.states.join(", ") : "All"}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "state" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.states.map((state) => (
+                  <div
+                    key={state}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("states", state)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filters.states.includes(state)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    {state}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Year Filter */}
           <div className="relative">
             <div
@@ -811,6 +870,18 @@ const HCPlandscape = () => {
           </div>
 
           {/* Active Filters Display */}
+          {filters.states.length > 0 && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              States: {filters.states.join(", ")}
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, states: [] }))}
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           {filters.selectedQuarter !== null && filters.selectedYear !== null && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               Quarter: {filters.selectedYear}-Q{filters.selectedQuarter}
@@ -857,7 +928,7 @@ const HCPlandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Rendering HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCPs}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCPs.toLocaleString()}</span>
         </div>
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex flex-col justify-between h-full">
@@ -869,7 +940,7 @@ const HCPlandscape = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M}</span>
+              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -881,7 +952,9 @@ const HCPlandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Treated per HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avgPatientsPerHCP}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">
+            {kpiData.avgPatientsPerHCP.toLocaleString()}
+          </span>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -891,7 +964,7 @@ const HCPlandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">#Referring HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCPs}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCPs.toLocaleString()}</span>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -901,7 +974,9 @@ const HCPlandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Avg #Pats Referred per HCPs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.avgPatientsReferredPerHCP}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">
+            {kpiData.avgPatientsReferredPerHCP.toLocaleString()}
+          </span>
         </div>
       </div>
 
@@ -969,29 +1044,31 @@ const HCPlandscape = () => {
 
       {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-72 p-2">
-          <span className="text-gray-500 text-[11px] font-[500] pb-4">HCP segment by SMA patient Potential</span>
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[25%] h-72 p-2">
+          <span className="text-gray-500 text-[11px] font-[500] pb-4">
+            Prescriber Cluster by Treated Patient Volume
+          </span>
           <div className="flex flex-col w-full h-64 p-2">
-          <div className="flex-grow">
+            <div className="flex-grow">
               {potential_data.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     layout="vertical"
                     data={potential_data}
-                    margin={{ top: 10, right: 20, left: -20, bottom: 10 }}
+                    margin={{ top: 10, right: 20, left: -10, bottom: 10 }}
                   >
                     <XAxis type="number" hide />
                     <YAxis dataKey="label" type="category" width={80} tick={{ fontSize: 10 }} />
                     <Tooltip
-                      cursor={{ fill: '#f0f0f0' }}
-                      wrapperStyle={{ fontSize: '10px' }}
-                      formatter={(value) => [value, 'Value']}
+                      cursor={{ fill: "#f0f0f0" }}
+                      wrapperStyle={{ fontSize: "10px" }}
+                      formatter={(value) => [value, "Value"]}
                     />
                     <Bar dataKey="value" radius={[0, 10, 10, 0]}>
                       {potential_data.map((item, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill='#217fad'
+                          fill="#217fad"
                           cursor="pointer"
                           onClick={() => handleFilterChange("segment", item.segment)}
                         />
@@ -1009,23 +1086,9 @@ const HCPlandscape = () => {
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[30%] h-72 p-2">
           <div className="flex gap-2 items-center justify-between w-full pb-4">
             <span className="text-gray-500 text-[11px] font-[500]">HCP Split by Segment and Age Group</span>
-            <div className="flex gap-2 items-center">
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#2c84b0] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">{"<2"}</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">{"3-17"}</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#addaf0] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">{">18"}</span>
-              </div>
-            </div>
           </div>
 
-          <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20,marginTop:20 }}>
+          <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20 }}>
             <BarChart data={hcpsplit_age}>
               <CartesianGrid strokeDasharray="3 3" />
 
@@ -1089,44 +1152,31 @@ const HCPlandscape = () => {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          <div className="flex gap-2 items-center justify-center p-2">
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#2c84b0] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">{"<2"}</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">{"3-17"}</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#addaf0] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">{">18"}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-72 p-2">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[45%] h-72 p-2">
           <div className="flex gap-4 items-center justify-between w-full pb-4">
             <div>
               <span className="text-gray-500 text-[11px] font-[500] text-wrap">HCP Split by Segment and Specialty</span>
             </div>
-
-            <div className="flex gap-2 items-center flex-wrap justify-end">
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#2c84b0] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Pediatric</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Child Neurology</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#addaf0] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Neurology</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#e7caed] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">Neuromuscular</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#bac8f5] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">NP/PA</span>
-              </div>
-              <div className="flex gap-1 items-center">
-                <div className="bg-[#f5d6ba] rounded-full w-2 h-2"></div>
-                <span className="text-[10px] text-gray-600">All Others</span>
-              </div>
-            </div>
           </div>
 
-          <ResponsiveContainer width="100%" height="110%" style={{ marginRight: -10, marginBottom: -20,marginTop:-10 }}>
-            <BarChart data={hcpsplit_specialty_data}>
+          <ResponsiveContainer width="100%" height="80%" style={{ marginRight: -10, marginBottom: -20 }}>
+            <BarChart data={hcpsplit_specialty_data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
@@ -1137,25 +1187,9 @@ const HCPlandscape = () => {
               />
 
               <Bar
-                dataKey="Pediatric"
-                stackId="a"
-                fill="#2c84b0"
-                onClick={(data) => handleSegmentBarClick(data)}
-                cursor="pointer"
-              >
-                <LabelList
-                  dataKey="Pediatric"
-                  position="insideTop"
-                  fontSize={9}
-                  fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
-                />
-              </Bar>
-
-              <Bar
                 dataKey="Child Neurology"
                 stackId="a"
-                fill="#8295ae"
+                fill="#5d708a"
                 onClick={(data) => handleSegmentBarClick(data)}
                 cursor="pointer"
               >
@@ -1167,11 +1201,10 @@ const HCPlandscape = () => {
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
-
               <Bar
                 dataKey="Neurology"
                 stackId="a"
-                fill="#addaf0"
+                fill="#7cb1cc"
                 onClick={(data) => handleSegmentBarClick(data)}
                 cursor="pointer"
               >
@@ -1179,15 +1212,14 @@ const HCPlandscape = () => {
                   dataKey="Neurology"
                   position="insideTop"
                   fontSize={9}
-                  fill="#000"
+                  fill="#fff"
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
-
               <Bar
                 dataKey="Neuromuscular"
                 stackId="a"
-                fill="#e7caed"
+                fill="#c39ac9"
                 onClick={(data) => handleSegmentBarClick(data)}
                 cursor="pointer"
               >
@@ -1195,15 +1227,44 @@ const HCPlandscape = () => {
                   dataKey="Neuromuscular"
                   position="insideTop"
                   fontSize={9}
-                  fill="#000"
+                  fill="#fff"
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
-
+              <Bar
+                dataKey="Pediatric"
+                stackId="a"
+                fill="#1f5f86"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+              >
+                <LabelList
+                  dataKey="Pediatric"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+              </Bar>
+              <Bar
+                dataKey="Radiology"
+                stackId="a"
+                fill="#a686c1"
+                onClick={(data) => handleSegmentBarClick(data)}
+                cursor="pointer"
+            >
+              <LabelList
+                  dataKey="Radiology"
+                  position="insideTop"
+                  fontSize={9}
+                  fill="#fff"
+                  formatter={(val) => `${Math.round(val)}%`}
+                />
+            </Bar>
               <Bar
                 dataKey="NP/PA"
                 stackId="a"
-                fill="#bac8f5"
+                fill="#8ea2e0"
                 onClick={(data) => handleSegmentBarClick(data)}
                 cursor="pointer"
               >
@@ -1211,15 +1272,14 @@ const HCPlandscape = () => {
                   dataKey="NP/PA"
                   position="insideTop"
                   fontSize={9}
-                  fill="#000"
+                  fill="#fff"
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
-
               <Bar
                 dataKey="All Others"
                 stackId="a"
-                fill="#f5d6ba"
+                fill="#dfb793"
                 radius={[10, 10, 0, 0]}
                 onClick={(data) => handleSegmentBarClick(data)}
                 cursor="pointer"
@@ -1228,12 +1288,43 @@ const HCPlandscape = () => {
                   dataKey="All Others"
                   position="insideTop"
                   fontSize={9}
-                  fill="#333"
+                  fill="#fff"
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+
+          <div className="flex gap-2 items-center flex-wrap justify-center p-2">
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#5d708a] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Child Neurology</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#7cb1cc] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Neurology</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#c39ac9] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Neuromuscular</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#1f5f86] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Pediatric</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#a686c1] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">Radiology</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#8ea2e0] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">NP/PA</span>
+            </div>
+            <div className="flex gap-1 items-center">
+              <div className="bg-[#dfb793] rounded-full w-2 h-2"></div>
+              <span className="text-[10px] text-gray-600">All Others</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1268,6 +1359,7 @@ const HCPlandscape = () => {
                 <th className="p-2 text-left">HCP ID</th>
                 <th className="p-2 text-left">HCP Name</th>
                 <th className="p-2 text-left">Specialty</th>
+                <th className="p-2 text-left">State</th>
                 <th className="p-2 text-left">HCP Segment</th>
                 <th className="p-2 text-right">Patient Count</th>
                 <th className="p-2 text-left">Affiliated Accounts</th>
@@ -1285,6 +1377,7 @@ const HCPlandscape = () => {
                     {hcp["HCP Name"]}
                   </td>
                   <td className="p-2">{hcp.Specialty}</td>
+                  <td className="p-2">{hcp.State}</td>
                   <td className="p-2">{hcp["HCP Segment"]}</td>
                   <td className="p-2 text-right">{hcp["Patient Count"]}</td>
                   <td className="p-2">{hcp["Affiliated Accounts"]}</td>

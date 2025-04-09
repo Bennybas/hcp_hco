@@ -10,40 +10,47 @@ import {
 } from 'recharts'
 
 const HCOchart = ({ HCOdata }) => {
-  const formatSegmentName = (segment) => {
-    segment = segment.replace(/-/g, '').toUpperCase()
-    if (segment === 'TIER 1') return 'High'
-    if (segment === 'TIER 2') return 'Medium'
-    if (segment === 'TIER 3') return 'Low'
-    if (segment === 'TIER 4') return 'Very Low' 
-    return segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase()
-  }  
+  const formatGroupName = (group) => {
+    group = group.replace(/-/g, '').trim().toUpperCase()
+    if (group === 'DELETE') return 'UNSPECIFIED'
+    return group.toUpperCase()
+  }
+  
+
+  const displayOrder = [
+    'CURRENT IV',
+    'IV AFFILIATES',
+    'NEW IT TREATMENT CENTERS',
+    'NEW TREATMENT CENTERS',
+    'UNSPECIFIED',
+  ]
 
   const segmentData = useMemo(() => {
     if (!HCOdata || !Array.isArray(HCOdata) || HCOdata.length === 0) return []
 
-    const segmentHCOMap = new Map()
+    const groupMap = new Map()
+
     HCOdata.forEach((record) => {
-      if (record.hco_mdm_tier && record.hco_mdm) {
-        const tier = record.hco_mdm_tier.replace(/-/g, '').trim().toUpperCase()
-        if (!tier) return
-        if (!segmentHCOMap.has(tier)) {
-          segmentHCOMap.set(tier, new Set())
-        }
-        segmentHCOMap.get(tier).add(record.hco_mdm)
+      let group = record.hco_grouping
+      const hco = record.hco_mdm
+
+      if (!group || group === '-' || !hco) return
+
+      group = group.trim().toUpperCase()
+      if (group === 'DELETE') group = 'UNSPECIFIED'
+
+      if (!groupMap.has(group)) {
+        groupMap.set(group, new Set())
       }
+      groupMap.get(group).add(hco)
     })
 
-    const result = Array.from(segmentHCOMap).map(([name, hcoSet]) => ({
-      name: formatSegmentName(name),
-      value: hcoSet.size,
-    }))
-
-    const orderMap = { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2, 'VERY LOW': 3 }
-    result.sort((a, b) => {
-      const aOrder = orderMap[a.name.toUpperCase()] ?? 999
-      const bOrder = orderMap[b.name.toUpperCase()] ?? 999
-      return aOrder - bOrder
+    const result = displayOrder.map((group) => {
+      const count = groupMap.has(group) ? groupMap.get(group).size : 0
+      return {
+        name: formatGroupName(group),
+        value: count,
+      }
     })
 
     return result
@@ -71,23 +78,23 @@ const HCOchart = ({ HCOdata }) => {
         </span>
       </div>
 
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="90%" height="100%">
         <BarChart
           layout="vertical"
           data={segmentData}
-          margin={{ top: 10, right: 30, left: -15, bottom: 10 }}
+          margin={{ top: 10, right: 30, left: -12, bottom: 10 }}
         >
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis
             dataKey="name"
             type="category"
-            tick={{ fontSize: 12 }}
-            width={70}
+            tick={{ fontSize: 10 }}
+            width={110}
           />
           <Tooltip wrapperStyle={{ fontSize: '10px' }} />
-          <Bar dataKey="value" radius={[0, 10, 10, 0]}>
+          <Bar dataKey="value" radius={[0, 8,8, 0]}>
             {segmentData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+              <Cell key={`cell-${index}`} fill={colors[0]} />
             ))}
           </Bar>
         </BarChart>

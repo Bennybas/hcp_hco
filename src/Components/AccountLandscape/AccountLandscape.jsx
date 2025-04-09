@@ -222,34 +222,45 @@ const AccountLandscape = () => {
   }
 
   const processFacilityTypeData = (filteredData) => {
-    // Group by hco_grouping and count unique patients
-    const groupingMap = new Map()
+    // Format group name function
+    const formatGroupName = (group) => {
+      if (!group || group === "-") return "UNSPECIFIED"
+      group = group.replace(/-/g, "").trim().toUpperCase()
+      if (group === "DELETE") return "UNSPECIFIED"
+      return group
+    }
+
+    // Define display order for HCO groupings
+    const displayOrder = [
+      "CURRENT IV",
+      "IV AFFILIATES",
+      "NEW IT TREATMENT CENTERS",
+      "NEW TREATMENT CENTERS",
+      "UNSPECIFIED",
+    ]
+
+    // Group by hco_grouping and count unique HCOs
+    const groupMap = new Map()
 
     filteredData.forEach((item) => {
-      if (item.hco_grouping && item.hco_grouping !== "-" && item.patient_id && item.patient_id !== "-") {
-        if (!groupingMap.has(item.hco_grouping)) {
-          groupingMap.set(item.hco_grouping, new Set())
+      if (item.hco_grouping && item.rend_hco_npi && item.rend_hco_npi !== "-") {
+        const group = formatGroupName(item.hco_grouping)
+
+        if (!groupMap.has(group)) {
+          groupMap.set(group, new Set())
         }
-        groupingMap.get(item.hco_grouping).add(item.patient_id)
+        groupMap.get(group).add(item.rend_hco_npi)
       }
     })
 
-    // Convert to array format for chart
-    const colors = [
-      "#00599D", // Keep this as the primary blue
-      "#4A7D99", // Darker than #6A99B5
-      "#52C97C", // Darker than #7DFFA8
-      "#C087CB", // Darker than #F0C3F7
-      "#91BDD8", // Darker than #C8E3F5
-    ]
-
-    const result = Array.from(groupingMap.entries())
-      .map(([name, patients], index) => ({
-        name,
-        value: patients.size,
-        color: colors[index % colors.length],
-      }))
-      .sort((a, b) => b.value - a.value) // Sort by value in descending order
+    // Create result array with predefined order
+    const result = displayOrder.map((group) => {
+      const count = groupMap.has(group) ? groupMap.get(group).size : 0
+      return {
+        name: group,
+        value: count,
+      }
+    })
 
     setFacilityTypeData(result)
   }
@@ -465,9 +476,6 @@ const AccountLandscape = () => {
     navigate("/hco", { state: { hco_id: hcoId } })
   }
 
-  // Calculate max value for HCO tier data
-  const maxValue = hcoTierData.length > 0 ? Math.max(...hcoTierData.map((item) => item.value), 0) : 0
-
   // Calculate total pages
   const totalPages = Math.ceil(allAccountTableData.length / rowsPerPage)
 
@@ -650,7 +658,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Rendering HCOs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCOs}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.renderingHCOs.toLocaleString()}</span>
         </div>
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
           <div className="flex flex-col justify-between h-full">
@@ -662,7 +670,7 @@ const AccountLandscape = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M}</span>
+              <span className="text-gray-700 text-[16px] font-[500]">{kpiData.patientsLast12M.toLocaleString()}</span>
               {/* <MoveUpRight className="text-green-500 ml-2" style={{ width: "10px", height: "10px" }} />
               <span className="text-green-500 text-xs">5.2%</span>
               <span className="text-gray-500 text-xs">vs last month</span> */}
@@ -687,7 +695,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Referred in Last 12M</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.patientsReferred}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.patientsReferred.toLocaleString()}</span>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[20%] h-20 p-2 justify-between">
@@ -697,7 +705,7 @@ const AccountLandscape = () => {
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Referring HCOs</span>
           </div>
-          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCOs}</span>
+          <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.referringHCOs.toLocaleString()}</span>
         </div>
       </div>
 
@@ -800,28 +808,29 @@ const AccountLandscape = () => {
       {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-60 p-2">
-          <span className="text-gray-500 text-[11px] font-[500] pb-4">HCO Tier by SMA Patients Potential</span>
-          <div className="flex flex-col space-y-3 flex-grow justify-around pr-2">
-            {hcoTierData.map((item, index) => (
-              <div key={index} className="flex flex-col items-center w-full">
-                <div className="flex items-center w-full">
-                  <span className="text-gray-500 text-[10px] w-[120px] shrink-0 mr-2">{item.label}</span>
-                </div>
-                <div className="flex items-center w-full">
-                  <div className="flex-grow bg-gray-100 rounded-full h-[6px] mr-2">
-                    <div
-                      className="h-[6px] rounded-full"
-                      style={{
-                        width: `${(item.value / maxValue) * 100}%`,
-                        backgroundColor: item.color,
-                      }}
-                    ></div>
-                  </div>
-                  <span className="text-gray-600 text-[10px] font-medium w-[20px] text-right">{item.value}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex gap-2 items-center mb-3">
+            <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 576 512"
+                className="text-[#004567] h-[0.8rem] w-[0.8rem]"
+              >
+                <path
+                  fill="currentColor"
+                  d="M142.4 21.9c5.6 16.8-3.5 34.9-20.2 40.5L96 71.1V192c0 53 43 96 96 96s96-43 96-96V71.1l-26.1-8.7c-16.8-5.6-25.8-23.7-20.2-40.5s23.7-25.8 40.5-20.2l26.1 8.7C334.4 19.1 352 43.5 352 71.1V192c0 77.2-54.6 141.6-127.3 156.7C231 404.6 278.4 448 336 448c61.9 0 112-50.1 112-112V265.3c-28.3-12.3-48-40.5-48-73.3c0-44.2 35.8-80 80-80s80 35.8 80 80c0 32.8-19.7 61-48 73.3V336c0 97.2-78.8 176-176 176c-92.9 0-168.9-71.9-175.5-163.1C87.2 334.2 32 269.6 32 192V71.1c0-27.5 17.6-52 43.8-60.7l26.1-8.7c16.8-5.6 34.9 3.5 40.5 20.2zM480 224c17.7 0 32-14.3 32-32s-14.3-32-32-32s-32 14.3-32 32s14.3 32 32 32z"
+                />
+              </svg>
+            </div>
+            <span className="text-gray-500 text-[11px] font-[500]">HCO Cluster by Treated Patient Volume</span>
           </div>
+          <ResponsiveContainer width="90%" height="100%">
+            <BarChart layout="vertical" data={facilityTypeData} margin={{ top: 10, right: 30, left: -12, bottom: 10 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} hide />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
+              <Tooltip wrapperStyle={{ fontSize: "10px" }} />
+              <Bar dataKey="value" radius={[0, 8, 8, 0]} fill="#217fad" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-60">
