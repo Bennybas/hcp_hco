@@ -224,11 +224,12 @@ const AccountLandscape = () => {
   const processFacilityTypeData = (filteredData) => {
     // Format group name function
     const formatGroupName = (group) => {
-      if (!group || group === "-") return "UNSPECIFIED"
-      group = group.replace(/-/g, "").trim().toUpperCase()
-      if (group === "DELETE") return "UNSPECIFIED"
+      if (!group || group.trim() === '-') return null // Only skip '-' cases
+      group = group.replace(/-/g, '').trim().toUpperCase()
+      if (group === 'DELETE') return 'UNSPECIFIED'    // Still convert DELETE
       return group
     }
+    
 
     // Define display order for HCO groupings
     const displayOrder = [
@@ -243,13 +244,13 @@ const AccountLandscape = () => {
     const groupMap = new Map()
 
     filteredData.forEach((item) => {
-      if (item.hco_grouping && item.rend_hco_npi && item.rend_hco_npi !== "-") {
+      if (item.hco_grouping && item.patient_id && item.patient_id !== "-") {
         const group = formatGroupName(item.hco_grouping)
 
         if (!groupMap.has(group)) {
           groupMap.set(group, new Set())
         }
-        groupMap.get(group).add(item.rend_hco_npi)
+        groupMap.get(group).add(item.patient_id)
       }
     })
 
@@ -807,7 +808,7 @@ const AccountLandscape = () => {
 
       {/* Charts - Second Row */}
       <div className="flex gap-4 w-full">
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-60 p-2">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[40%] h-78 p-2">
           <div className="flex gap-2 items-center mb-3">
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <svg
@@ -821,7 +822,7 @@ const AccountLandscape = () => {
                 />
               </svg>
             </div>
-            <span className="text-gray-500 text-[11px] font-[500]">HCO Cluster by Treated Patient Volume</span>
+            <span className="text-gray-500 text-[11px] font-[500]">HCO Group by Patient</span>
           </div>
           <ResponsiveContainer width="90%" height="100%">
             <BarChart layout="vertical" data={facilityTypeData} margin={{ top: 10, right: 30, left: -12, bottom: 10 }}>
@@ -833,7 +834,7 @@ const AccountLandscape = () => {
           </ResponsiveContainer>
         </div>
 
-        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-60">
+        <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-[60%] h-78">
           <AccountMap onStateSelect={handleStateSelect} />
         </div>
       </div>
@@ -870,8 +871,8 @@ const AccountLandscape = () => {
                 <th className="p-2 text-left">No. HCPs</th>
                 <th className="p-2 text-left">SMA. Patients</th>
                 <th className="p-2 text-left">Affiliated Accounts</th>
-                <th className="p-2 text-left">Account Tier</th>
-                <th className="p-2 text-left">Account Archetype</th>
+                {/* <th className="p-2 text-left">Account Tier</th> */}
+                <th className="p-2 text-left">Account Grouping</th>
               </tr>
             </thead>
 
@@ -887,7 +888,7 @@ const AccountLandscape = () => {
                   <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">
                     {hco["Affiliated Account"]}
                   </td>
-                  <td className="p-2">{hco["Account Tier"]}</td>
+                  {/* <td className="p-2">{hco["Account Tier"]}</td> */}
                   <td className="p-2">{hco["Account Archetype"]}</td>
                 </tr>
               ))}

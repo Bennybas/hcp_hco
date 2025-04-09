@@ -9,7 +9,6 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 import { scaleQuantile } from "d3-scale"
 import api from "../api/api"
 import { useNavigate } from "react-router-dom"
-import { FaLocationDot } from "react-icons/fa6";
 
 // State abbreviations to full names mapping
 const stateAbbreviationToName = {
@@ -66,13 +65,12 @@ const stateAbbreviationToName = {
   DC: "District of Columbia",
 }
 
-// State names to abbreviations mapping
 const stateNameToAbbreviation = Object.entries(stateAbbreviationToName).reduce((acc, [abbr, name]) => {
   acc[name] = abbr
   return acc
 }, {})
 
-// Color ranges for the choropleth map
+
 const COLOR_RANGE = [
   "#f7fbff", // Lightest
   "#e3eef9",
@@ -143,12 +141,13 @@ const stateCenters = {
 // GeoJSON data for US states
 const statesGeoJsonUrl = "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
 
-// Tier colors mapping
-const tierColors = {
-  "Tier 1": "#02c95d", // Green
-  "Tier 2": "#FFC100", // Yellow/Gold
-  "Tier 3": "#7030A0", // Purple
-  "Tier 4": "#FF585D", // Red
+// HCO grouping colors mapping
+const groupingColors = {
+  "CURRENT IV": "#00B050", // Green
+  "IV AFFILIATES": "#FFC100", // Yellow/Gold
+  "NEW IT TREATMENT CENTERS": "#7030A0", // Purple
+  "NEW TREATMENT CENTERS": "#FF585D", // Red
+  Unspecified: "#CCCCCC", // Light gray for unspecified/missing values
 }
 
 const AccountMap = ({ onStateSelect }) => {
@@ -258,14 +257,15 @@ const AccountMap = ({ onStateSelect }) => {
       const hcoState = record.hco_state
       const hcpZip = record.hcp_zip
       const hcoZip = record.hco_postal_cd_prim
-      const hcoTier = record.hco_mdm_tier
+      const hcoGrouping = record.hco_grouping
 
       // Fix: Ensure we're getting the correct HCO name
       // Log the record to see what fields are available
-      console.log("Record HCO name fields:", {
-        hco_mdm_name: record.hco_mdm_name,
-        hco_name: record.hco_name,
-      })
+      // console.log("Record HCO name fields:", {
+      //   hco_mdm_name: record.hco_mdm_name,
+      //   hco_name: record.hco_name,
+      //   hco_grouping: record.hco_grouping,
+      // })
 
       // Use a more robust fallback chain for HCO name
       const hcoName = record.hco_mdm_name || record.hco_name || "Healthcare Organization"
@@ -355,19 +355,19 @@ const AccountMap = ({ onStateSelect }) => {
             if (hcoName && hcoName !== "Healthcare Organization") {
               existingLocation.name = hcoName
             }
-            // Store the tier information
-            if (hcoTier && hcoTier !== "-") {
-              existingLocation.tier = hcoTier
+            // Store the grouping information
+            if (hcoGrouping) {
+              existingLocation.grouping = hcoGrouping
             }
           } else {
-            // Add new location with the correct name and tier
+            // Add new location with the correct name and grouping
             locationMap.get(hcoState).push({
               id: hcoId,
               name: hcoName,
               lat: hcoLat,
               lng: hcoLong,
               zip: hcoZip,
-              tier: hcoTier !== "-" ? hcoTier : null,
+              grouping: hcoGrouping || "Unspecified",
               patients: new Set(patientId && patientId !== "-" ? [patientId] : []),
               hcps: new Set(hcpId && hcpId !== "-" ? [hcpId] : []),
             })
@@ -532,9 +532,6 @@ const AccountMap = ({ onStateSelect }) => {
         stateLocations.forEach((location) => {
           if (!location.lat || !location.lng || isNaN(location.lat) || isNaN(location.lng)) return
 
-          // Skip locations with no tier or tier value of "-"
-          if (!location.tier) return
-
           // Validate coordinates
           const lat = Number.parseFloat(location.lat)
           const lng = Number.parseFloat(location.lng)
@@ -542,36 +539,47 @@ const AccountMap = ({ onStateSelect }) => {
           if (isNaN(lat) || isNaN(lng)) return
 
           // Debug the location name
-          console.log("Location name:", location.name, "Location ID:", location.id, "Tier:", location.tier)
+          console.log("Location name:", location.name, "Location ID:", location.id, "Grouping:", location.grouping)
 
-          // Get the color based on tier
-          const markerColor = tierColors[location.tier] || "#808080" // Default gray if tier not found
+          // Get the color based on grouping
+          const markerColor = groupingColors[location.grouping] || groupingColors["Unspecified"]
 
-          // Create custom icon with the appropriate color based on tier
+          // Create custom icon with the appropriate color based on grouping
           const hcoIcon = L.divIcon({
             className: "custom-marker-icon",
-            html: `<div style="color: ${markerColor}; width: 24px; height: 24px; z-index: 1000;">
-                    
-                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="${markerColor}" fill-rule="evenodd" d="M11.291 21.706 12 21l-.709.706zM12 21l.708.706a1 1 0 0 1-1.417 0l-.006-.007-.017-.017-.062-.063a47.708 47.708 0 0 1-1.04-1.106 49.562 49.562 0 0 1-2.456-2.908c-.892-1.15-1.804-2.45-2.497-3.734C4.535 12.612 4 11.248 4 10c0-4.539 3.592-8 8-8 4.408 0 8 3.461 8 8 0 1.248-.535 2.612-1.213 3.87-.693 1.286-1.604 2.585-2.497 3.735a49.583 49.583 0 0 1-3.496 4.014l-.062.063-.017.017-.006.006L12 21zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" clip-rule="evenodd"></path></g></svg>
-                   </div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 24],
+            html: `
+              <div style="
+                position: relative;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
+              ">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" width="30" height="30" style="position: absolute; top: 0; left: 0; pointer-events: all;">
+                  <path fill="${markerColor}" fillRule="evenodd"
+                    d="M11.291 21.706 12 21l-.709.706zM12 21l.708.706a1 1 0 0 1-1.417 0l-.006-.007-.017-.017-.062-.063a47.708 47.708 0 0 1-1.04-1.106 49.562 49.562 0 0 1-2.456-2.908c-.892-1.15-1.804-2.45-2.497-3.734C4.535 12.612 4 11.248 4 10c0-4.539 3.592-8 8-8 4.408 0 8 3.461 8 8 0 1.248-.535 2.612-1.213 3.87-.693 1.286-1.604 2.585-2.497 3.735a49.583 49.583 0 0 1-3.496 4.014l-.062.063-.017.017-.006.006L12 21zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+                    clipRule="evenodd"></path>
+                </svg>
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 30], // anchor should be at the bottom center
           })
 
           try {
             const marker = L.marker([lat, lng], {
               icon: hcoIcon,
-              zIndexOffset: 1000, // Ensure markers appear above other layers
+              zIndexOffset: 1000,
             })
 
             // Use the actual name from the location data, with a fallback
             const displayName = location.name || "Healthcare Organization"
+            const displayGrouping = location.grouping === "Unspecified" ? "Not Specified" : location.grouping
 
             // Add popup with information
             marker.bindPopup(`
-              <div class="p-2">
+              <div class="p-2 text-[12px]">
                 <h3 class="font-bold">${displayName}</h3>
-                <p>Tier: ${location.tier}</p>
+                <p>Grouping: ${displayGrouping}</p>
                 <p>HCPs: ${location.hcpCount}</p>
                 <p>Patients: ${location.patientCount}</p>
                 <p>ZIP: ${location.zip || "N/A"}</p>
@@ -585,7 +593,7 @@ const AccountMap = ({ onStateSelect }) => {
                   marker.openPopup()
                   setZipTooltipContent(`
                     <strong>${displayName}</strong><br>
-                    Tier: ${location.tier}<br>
+                    Grouping: ${displayGrouping}<br>
                     HCPs: ${location.hcpCount}<br>
                     Patients: ${location.patientCount}
                   `)
@@ -744,6 +752,8 @@ const AccountMap = ({ onStateSelect }) => {
           showCoverageOnHover: false,
           zoomToBoundsOnClick: true,
           spiderfyOnMaxZoom: true,
+          removeOutsideVisibleBounds: false,
+          disableClusteringAtZoom: 8, // Show          true,
           removeOutsideVisibleBounds: false,
           disableClusteringAtZoom: 8, // Show individual markers at zoom level 8 and above
           maxClusterRadius: 80, // Larger value creates fewer, larger clusters
@@ -928,6 +938,15 @@ const AccountMap = ({ onStateSelect }) => {
         .marker-cluster {
           z-index: 650 !important;
         }
+        .custom-marker-icon {
+          cursor: pointer;
+        }
+        .custom-marker-icon > div {
+          pointer-events: auto !important;
+        }
+        .custom-marker-icon svg {
+          pointer-events: auto !important;
+        }
       `
       document.head.appendChild(style)
 
@@ -1016,8 +1035,8 @@ const AccountMap = ({ onStateSelect }) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     )
   }
@@ -1030,10 +1049,10 @@ const AccountMap = ({ onStateSelect }) => {
   const zipDisplayCount = showAllZips ? selectedStateZips.length : 12
 
   return (
-    <div className="flex flex-col gap-4 h-60 ">
+    <div className="flex flex-col gap-4">
       {/* Map container */}
       <div className="relative bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div id={mapContainerId.current} style={{ height: "240px", width: "100%" }} className="rounded-xl z-0"></div>
+        <div id={mapContainerId.current} style={{ height: "300px", width: "100%" }}className="rounded-xl z-0"></div>
 
         {/* Map tooltip */}
         <div
@@ -1042,14 +1061,14 @@ const AccountMap = ({ onStateSelect }) => {
             display: tooltipContent ? "block" : "none",
             left: "30%",
             bottom: "10px",
-            
+
             transform: "translateX(-50%)",
           }}
           dangerouslySetInnerHTML={{ __html: tooltipContent }}
         />
 
         {/* Legend */}
-        <div className="absolute bottom-4 right-4 bg-white p-2 rounded-md shadow-md text-xs z-10">
+        <div className="absolute bottom-0 right-0 bg-white p-2 rounded-md shadow-md text-xs z-10">
           <div className="text-[10px] font-medium mb-1">Patient Count</div>
           <div className="flex items-center">
             <div className="mr-1 text-[10px]">Low</div>
@@ -1067,67 +1086,34 @@ const AccountMap = ({ onStateSelect }) => {
             </div>
             <div className="ml-1 text-[10px]">High</div>
           </div>
-          <div className="flex flex-wrap mt-2 gap-1">
-            <div className="text-[10px] font-medium">HCO Tiers</div>
+          <div className="grid grid-cols-2 mt-2 gap-1">
+            {/* <div className="text-[10px] font-medium">HCO Groupings</div> */}
             <div className="flex items-center">
-              <div className="w-3 h-3 mr-1" style={{ backgroundColor: tierColors["Tier 1"] }}></div>
-              <span className="text-[10px]">Tier 1</span>
+              <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["CURRENT IV"] }}></div>
+              <span className="text-[8px]">CURRENT IV</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 mr-1" style={{ backgroundColor: tierColors["Tier 2"] }}></div>
-              <span className="text-[10px]">Tier 2</span>
+              <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["IV AFFILIATES"] }}></div>
+              <span className="text-[8px]">IV AFFILIATES</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 mr-1" style={{ backgroundColor: tierColors["Tier 3"] }}></div>
-              <span className="text-[10px]">Tier 3</span>
+              <div
+                className="w-2 h-2 mr-1"
+                style={{ backgroundColor: groupingColors["NEW IT TREATMENT CENTERS"] }}
+              ></div>
+              <span className="text-[8px]">NEW IT TREATMENT CENTERS</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 mr-1" style={{ backgroundColor: tierColors["Tier 4"] }}></div>
-              <span className="text-[10px]">Tier 4</span>
+              <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["NEW TREATMENT CENTERS"] }}></div>
+              <span className="text-[8px]">NEW TREATMENT CENTERS</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["Unspecified"] }}></div>
+              <span className="text-[8px]">UNSPECIFIED</span>
             </div>
           </div>
         </div>
       </div>
-
-      {/* ZIP code data */}
-      {/* <div className="flex flex-col gap-2 w-full mt-2">
-        {selectedState && (
-          <>
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">ZIP Codes in {stateAbbreviationToName[selectedState]}</h3>
-              <button onClick={() => setShowAllZips(!showAllZips)} className="text-blue-500 text-sm hover:underline">
-                {showAllZips ? "Show Less" : "Show All"}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedStateZips.slice(0, zipDisplayCount).map((zipData, index) => (
-                <div
-                  key={index}
-                  className="flex bg-blue-100 text-[#004567] w-[23%] h-8 rounded-xl text-[9px] p-[4px] items-center"
-                >
-                  <span>
-                    ZIP: <span className="font-[500]">{zipData.zip}</span>
-                  </span>
-                  <div className="border-l border-gray-500 h-[15px] mx-2"></div>
-                  <span>
-                    HCPs: <span className="font-[500]">{zipData.hcpCount}</span>
-                  </span>
-                  <div className="border-l border-gray-500 h-[15px] mx-2"></div>
-                  <span>
-                    HCOs: <span className="font-[500]">{zipData.hcoCount}</span>
-                  </span>
-                  <div className="border-l border-gray-500 h-[15px] mx-2"></div>
-                  <span>
-                    Patients: <span className="font-[500]">{zipData.patientCount}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {!selectedState && <div className="text-gray-500 text-sm">Select a state to view ZIP code data</div>}
-      </div> */}
     </div>
   )
 }

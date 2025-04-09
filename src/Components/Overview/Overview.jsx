@@ -7,6 +7,7 @@ import HCOchart from "./HCOchart"
 import { useNavigate } from "react-router-dom"
 import USAMap from "./Map"
 import api from "../api/api"
+import { ChevronDown, X } from "lucide-react"
 
 const Overview = () => {
   const navigate = useNavigate()
@@ -32,31 +33,68 @@ const Overview = () => {
   })
   const [dataTimestamp, setDataTimestamp] = useState(null)
 
+  // Year filter state
+  const [yearOptions, setYearOptions] = useState([])
+  const [selectedYears, setSelectedYears] = useState([])
+  const [showYearDropdown, setShowYearDropdown] = useState(false)
+
+  // HCP segment and HCO grouping filters
+  const [selectedHcpSegment, setSelectedHcpSegment] = useState(null)
+  const [selectedHcoGrouping, setSelectedHcoGrouping] = useState(null)
+
   // Fetch data only once when component mounts
   useEffect(() => {
     fetchData()
   }, [])
 
-  // Update filtered data when selected state changes
+  // Update filtered data when filters change
   useEffect(() => {
     if (data.length > 0) {
+      let filtered = [...data]
+
+      // Apply state filter
       if (selectedState) {
-        // For charts and tables, we'll still filter the data to show state-specific information
-        const stateData = data.filter(
+        filtered = filtered.filter(
           (item) =>
             item.hcp_state === selectedState ||
             item.hco_state === selectedState ||
             item.ref_hcp_state === selectedState ||
             item.ref_hco_state === selectedState,
         )
-        setFilteredData(stateData)
-      } else {
-        setFilteredData(data)
       }
-      // Always calculate metrics with the full dataset and selectedState
-      calculateMetrics(data, selectedState)
+
+      // Apply year filter
+      if (selectedYears.length > 0) {
+        filtered = filtered.filter((item) => selectedYears.includes(item.year))
+      }
+
+      // Apply HCP segment filter
+      if (selectedHcpSegment) {
+        filtered = filtered.filter((item) => {
+          const segment = item.hcp_segment ? item.hcp_segment.toUpperCase() : ""
+          if (selectedHcpSegment === "HIGH") return segment === "HIGH"
+          if (selectedHcpSegment === "MODERATE") return ["MODERATE", "MEDIUM", "MED"].includes(segment)
+          if (selectedHcpSegment === "LOW") return segment === "LOW"
+          if (selectedHcpSegment === "V. LOW") return ["VERY LOW", "V. LOW", "V.LOW", "VLOW"].includes(segment)
+          return false
+        })
+      }
+
+      // Apply HCO grouping filter
+      if (selectedHcoGrouping) {
+        filtered = filtered.filter((item) => {
+          const grouping = item.hco_grouping ? item.hco_grouping.replace(/-/g, "").trim().toUpperCase() : ""
+          return (
+            grouping === selectedHcoGrouping ||
+            (selectedHcoGrouping === "UNSPECIFIED" && (grouping === "DELETE" || grouping === ""))
+          )
+        })
+      }
+
+      setFilteredData(filtered)
+      calculateMetrics(filtered, selectedState)
     }
-  }, [selectedState, data])
+  }, [selectedState, selectedYears, selectedHcpSegment, selectedHcoGrouping, data])
 
   const fetchData = async () => {
     try {
@@ -101,6 +139,13 @@ const Overview = () => {
       const fetchTimestamp = new Date().getTime()
       sessionStorage.setItem("overviewDataTimestamp", fetchTimestamp.toString())
       setDataTimestamp(fetchTimestamp)
+
+      // Extract unique years, excluding 2016 and 2025
+      const years = [...new Set(jsonData.map((item) => item.year))]
+        .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
+        .sort((a, b) => b - a) // Sort years in descending order
+
+      setYearOptions(years)
 
       // Keep the data in memory only
       setData(jsonData)
@@ -156,7 +201,7 @@ const Overview = () => {
     const hcpPatientMap = new Map()
     const hcpIdToNameMap = new Map()
     const hcpIdToSpecialityMap = new Map()
-    const hcpKOLMap = new Map() 
+    const hcpKOLMap = new Map()
 
     renderingHcps.forEach((item) => {
       if (item.hcp_id && item.hcp_id !== "-") {
@@ -196,7 +241,6 @@ const Overview = () => {
     const hcoPatientMap = new Map()
     const hcoIdToNameMap = new Map()
     const hcoIdToGroupingMap = new Map()
-  
 
     // Process rendering HCOs with state filter
     renderingHcos.forEach((item) => {
@@ -256,7 +300,7 @@ const Overview = () => {
         name: hcpIdToNameMap.get(hcpId) || `HCP ${hcpId}`,
         volume: patients.size,
         speciality: hcpIdToSpecialityMap.get(hcpId) || "Unknown",
-        kol:hcpKOLMap.get(hcpId)
+        kol: hcpKOLMap.get(hcpId),
       }
     })
 
@@ -305,6 +349,43 @@ const Overview = () => {
     setSelectedState(stateAbbr)
   }
 
+  // Handle year selection
+  const handleYearToggle = (year) => {
+    setSelectedYears((prev) => {
+      if (prev.includes(year)) {
+        return prev.filter((y) => y !== year)
+      } else {
+        return [...prev, year]
+      }
+    })
+  }
+
+  // Handle HCP segment selection from chart
+  const handleHcpSegmentSelect = (segment) => {
+    if (selectedHcpSegment === segment) {
+      setSelectedHcpSegment(null) // Clear filter if same segment clicked
+    } else {
+      setSelectedHcpSegment(segment)
+    }
+  }
+
+  // Handle HCO grouping selection from chart
+  const handleHcoGroupingSelect = (grouping) => {
+    if (selectedHcoGrouping === grouping) {
+      setSelectedHcoGrouping(null) // Clear filter if same grouping clicked
+    } else {
+      setSelectedHcoGrouping(grouping)
+    }
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSelectedState(null)
+    setSelectedYears([])
+    setSelectedHcpSegment(null)
+    setSelectedHcoGrouping(null)
+  }
+
   const getHCPDetails = (hcpName) => {
     navigate("/hcp", { state: { hcp_name: hcpName } })
   }
@@ -330,18 +411,89 @@ const Overview = () => {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-2 px-2">
-        {/* <div className="flex items-center gap-2">
-          {dataTimestamp && (
-            <span className="text-xs text-gray-500">Last updated: {new Date(dataTimestamp).toLocaleTimeString()}</span>
-          )}
-          <button
-            onClick={refreshData}
-            className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors"
-          >
-            Refresh Data
-          </button>
-        </div> */}
+      <div className="flex w-full justify-between p-2">
+        <div className="flex items-center gap-2">
+          {/* Year Filter Dropdown */}
+          <div className="relative">
+            <div
+              className="flex bg-white rounded-lg items-center justify-between p-2 cursor-pointer min-w-[120px]"
+              onClick={() => setShowYearDropdown(!showYearDropdown)}
+            >
+              <span className="text-[12px] text-gray-600">
+                Year: {selectedYears.length === 0 ? "All" : selectedYears.join(", ")}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+
+            {showYearDropdown && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-48 max-h-60 overflow-y-auto">
+                {yearOptions.map((year) => (
+                  <div
+                    key={year}
+                    className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleYearToggle(year)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedYears.includes(year)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    <span className="text-[12px]">{year}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active Filters Display */}
+          <div className="flex flex-wrap gap-2">
+            {selectedHcpSegment && (
+              <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+                HCP Segment: {selectedHcpSegment}
+                <button onClick={() => setSelectedHcpSegment(null)} className="ml-1 text-blue-600 hover:text-blue-800">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+
+            {selectedHcoGrouping && (
+              <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+                HCO Grouping: {selectedHcoGrouping}
+                <button onClick={() => setSelectedHcoGrouping(null)} className="ml-1 text-blue-600 hover:text-blue-800">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+
+            {(selectedState || selectedYears.length > 0 || selectedHcpSegment || selectedHcoGrouping) && (
+              <button
+                onClick={clearAllFilters}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-2 py-1 text-[11px] flex items-center"
+              >
+                Clear All Filters
+                <X size={12} className="ml-1" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* {selectedState && (
+          <div className="px-4 rounded-md text-center flex justify-end w-full">
+            <span className="text-[12px] font-medium">
+              Showing data for: <span className="text-blue-700">{ABBR_TO_STATE[selectedState]}</span>
+              <button
+                onClick={() => setSelectedState(null)}
+                className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-xl text-xs hover:bg-blue-200"
+              >
+                Clear Filter
+              </button>
+            </span>
+          </div>
+        )} */}
       </div>
 
       <div className="flex gap-4 w-full p-2">
@@ -413,24 +565,15 @@ const Overview = () => {
             </div>
           </div>
 
-          <PrescriberClusterChart hcpData={filteredData} />
+          <PrescriberClusterChart
+            hcpData={filteredData}
+            onSegmentClick={handleHcpSegmentSelect}
+            selectedSegment={selectedHcpSegment}
+          />
         </div>
 
         <div className="flex flex-col w-[42%] ">
           <USAMap onStateSelect={handleStateSelect} />
-          {/* {selectedState && (
-            <div className="mt-2 p-2 bg-blue-50 rounded-md text-center">
-              <span className="text-sm font-medium">
-                Showing data for: <span className="text-blue-700">{ABBR_TO_STATE[selectedState]}</span>
-                <button
-                  onClick={() => setSelectedState(null)}
-                  className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs hover:bg-blue-200"
-                >
-                  Clear Filter
-                </button>
-              </span>
-            </div>
-          )} */}
         </div>
 
         <div className="flex flex-col w-[29%] gap-2">
@@ -501,7 +644,11 @@ const Overview = () => {
             </div>
           </div>
 
-          <HCOchart HCOdata={filteredData} />
+          <HCOchart
+            HCOdata={filteredData}
+            onGroupingClick={handleHcoGroupingSelect}
+            selectedGrouping={selectedHcoGrouping}
+          />
         </div>
       </div>
 
@@ -518,7 +665,6 @@ const Overview = () => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
-                  
                   <th className="p-2 text-left">HCP NPI</th>
                   <th className="p-2 text-left">HCP Name</th>
                   <th className="p-2 text-left">HCP Speciality</th>
@@ -530,7 +676,6 @@ const Overview = () => {
                 {metrics.topHCPs.length > 0 ? (
                   metrics.topHCPs.map((hcp, index) => (
                     <tr key={index} className="border-t text-gray-800 text-[9px]">
-                     
                       <td onClick={() => getHCPDetails(hcp.name)} className="p-2 cursor-pointer">
                         {hcp.id}
                       </td>
@@ -566,9 +711,9 @@ const Overview = () => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
-                <th className="p-2 text-left">HCO MDM ID</th>
+                  <th className="p-2 text-left">HCO MDM ID</th>
                   <th className="p-2 text-left">HCO Name</th>
-                 
+
                   <th className="p-2 text-left">HCO Grouping</th>
                   <th className="p-2 text-left">HCO Archytype</th>
                   <th className="p-2 text-right">Treated pat. Vol</th>
@@ -578,7 +723,6 @@ const Overview = () => {
                 {metrics.topHCOs.length > 0 ? (
                   metrics.topHCOs.map((hco, index) => (
                     <tr key={index} className="border-t text-gray-800 text-[9px]">
-                     
                       <td onClick={() => getHCODetails(hco.id)} className="p-2 cursor-pointer">
                         {hco.id}
                       </td>

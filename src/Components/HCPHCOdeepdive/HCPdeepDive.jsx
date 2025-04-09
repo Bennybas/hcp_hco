@@ -217,7 +217,7 @@ const HCPdeepDive = () => {
         .scaleOrdinal()
         .domain(Object.keys(accountGroups))
         .range([
-          "#4e79a7",
+          "#63f7ad",
           "#f28e2b",
           "#e15759",
           "#76b7b2",
@@ -415,32 +415,32 @@ const HCPdeepDive = () => {
         .text("Use mouse wheel to zoom, drag to pan")
 
       // Add legend for HCP-HCO pairs
-      const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right + 20}, 20)`)
+      // const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right + 20}, 20)`)
 
-      // Add legend title
-      legendGroup
-        .append("text")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("font-size", "12px")
-        .attr("font-weight", "bold")
-        .text("HCP-HCO Pairs")
+      // // Add legend title
+      // legendGroup
+      //   .append("text")
+      //   .attr("x", 0)
+      //   .attr("y", 0)
+      //   .attr("font-size", "12px")
+      //   .attr("font-weight", "bold")
+      //   .text("HCP-HCO Pairs")
 
-      // Add legend items (limit to 10 to avoid overcrowding)
-      const legendItems = Object.keys(accountGroups).slice(0, 10)
+      // // Add legend items (limit to 10 to avoid overcrowding)
+      // const legendItems = Object.keys(accountGroups).slice(0, 10)
 
-      legendItems.forEach((accountName, i) => {
-        const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 20 + 20})`)
+      // legendItems.forEach((accountName, i) => {
+      //   const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 20 + 20})`)
 
-        g.append("circle").attr("r", 6).attr("fill", colorScale(accountName))
+      //   g.append("circle").attr("r", 6).attr("fill", colorScale(accountName))
 
-        g.append("text")
-          .attr("x", 15)
-          .attr("y", 0)
-          .attr("dy", ".35em")
-          .attr("font-size", "10px")
-          .text(accountName.length > 25 ? accountName.substring(0, 25) + "..." : accountName)
-      })
+      //   g.append("text")
+      //     .attr("x", 15)
+      //     .attr("y", 0)
+      //     .attr("dy", ".35em")
+      //     .attr("font-size", "10px")
+      //     .text(accountName.length > 25 ? accountName.substring(0, 25) + "..." : accountName)
+      // })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -813,7 +813,7 @@ const HCPdeepDive = () => {
 
             <div className="p-4">
               <div className="flex gap-2 items-center py-2">
-                <div className="text-gray-700 text-[11px] font-medium ">Patients Referral Out</div>
+                <div className="text-gray-700 text-[11px] font-medium ">Patients Referral</div>
 
                 <div className="flex space-x-2">
                   <button

@@ -507,7 +507,7 @@ const HCPlandscape = () => {
 
     const labelMap = {
       HIGH: "High Potential",
-      MEDIUM: "Moderate",
+      MEDIUM: "Medium Potential",
       LOW: "Low Potential",
       "V-LOW": "Very Low Potential",
       "VERY LOW": "Very Low Potential",
@@ -522,7 +522,7 @@ const HCPlandscape = () => {
     }))
 
     // Sort by predefined order: High, Moderate, Low, V. Low
-    const orderMap = { HIGH: 0, MEDIUM: 1, MODERATE: 1, LOW: 2, "V-LOW": 3, "VERY LOW": 3 }
+    const orderMap = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3, "VERY LOW": 3 }
 
     result.sort((a, b) => {
       const aSegment = Object.keys(labelMap).find((key) => labelMap[key] === a.label) || ""

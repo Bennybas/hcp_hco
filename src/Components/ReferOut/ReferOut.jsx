@@ -21,7 +21,7 @@ const createMapIcon = (iconUrl, iconSize) => {
 const locationIcon = createMapIcon("/location-marker.svg", 30)
 
 // Stethoscope icon for referring HCPs/HCOs
-const stethoscopeIcon = createMapIcon("/stethoscope.svg", 30)
+const stethoscopeIcon = createMapIcon("/location-mark2.svg", 30)
 
 // Map bounds controller component
 const MapBoundsController = ({ bounds }) => {
@@ -46,7 +46,7 @@ const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, select
           <Tooltip permanent={selectedEntity.referring === marker.name}>
             <div className="text-xs">
               <strong>{marker.name}</strong>
-              <div>Patients: {marker.count}</div>
+              <div>Patients Referred: {marker.count}</div>
             </div>
           </Tooltip>
         </Marker>
@@ -58,7 +58,12 @@ const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, select
           <Tooltip permanent={selectedEntity.rendering === marker.name}>
             <div className="text-xs">
               <strong>{marker.name}</strong>
-              <div>Patients: {marker.count}</div>
+              <div>Patients Rendered: {marker.count}</div>
+              {marker.isWithinOrg !== undefined && (
+                <div className={marker.isWithinOrg ? "text-green-600" : "text-orange-600"}>
+                  {marker.isWithinOrg ? "Within Organization" : "Outside Organization"}
+                </div>
+              )}
             </div>
           </Tooltip>
         </Marker>
@@ -75,20 +80,13 @@ const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, select
               dashArray: "5, 5",
               opacity: 0.7,
             }}
-          />
-          {/* Patient count label in the middle of the line */}
-          <Marker
-            position={[
-              (connection.refPosition[0] + connection.rendPosition[0]) / 2,
-              (connection.refPosition[1] + connection.rendPosition[1]) / 2,
-            ]}
-            icon={L.divIcon({
-              html: `<div class="bg-white px-2 py-1 rounded-full border border-blue-500 text-xs font-bold">${connection.patientCount}</div>`,
-              className: "patient-count-label",
-              iconSize: [40, 20],
-              iconAnchor: [20, 10],
-            })}
-          />
+          >
+            <Tooltip direction="center" permanent={false}>
+              <div className="text-xs">
+                <strong>Patients: {connection.patientCount}</strong>
+              </div>
+            </Tooltip>
+          </Polyline>
         </React.Fragment>
       ))}
     </>
@@ -463,20 +461,28 @@ const ReferOut = ({ referType = "HCP" }) => {
       if (!item.ref_npi) return
 
       if (!entityMap.has(entityName)) {
-        entityMap.set(entityName, new Set())
+        entityMap.set(entityName, {
+          patients: new Set(),
+          isWithinOrg: item.ref_organization_mdm_name === item.hco_mdm_name,
+          refOrgName: item.ref_organization_mdm_name,
+          rendOrgName: item.hco_mdm_name,
+        })
       }
 
       // Add patient to the set if it exists
       if (item.patient_id) {
-        entityMap.get(entityName).add(item.patient_id)
+        entityMap.get(entityName).patients.add(item.patient_id)
       }
     })
 
     // Convert to array and sort by count
     return Array.from(entityMap.entries())
-      .map(([name, patients]) => ({
+      .map(([name, data]) => ({
         name,
-        count: patients.size,
+        count: data.patients.size,
+        isWithinOrg: data.isWithinOrg,
+        refOrgName: data.refOrgName,
+        rendOrgName: data.rendOrgName,
       }))
       .sort((a, b) => b.count - a.count)
       .filter((entity) => {
@@ -582,6 +588,8 @@ const ReferOut = ({ referType = "HCP" }) => {
           name: entityName,
           position: [item.rend_hco_lat, item.rend_hco_long],
           patients: new Set(),
+          // Check if within organization when a referring entity is selected
+          isWithinOrg: selectedEntity.referring ? item.ref_organization_mdm_name === item.hco_mdm_name : undefined,
         })
       }
 
@@ -596,7 +604,7 @@ const ReferOut = ({ referType = "HCP" }) => {
       ...marker,
       count: marker.patients.size,
     }))
-  }, [filteredData, referType])
+  }, [filteredData, referType, selectedEntity.referring])
 
   // Memoized map bounds
   const mapBounds = useMemo(() => {
@@ -751,7 +759,9 @@ const ReferOut = ({ referType = "HCP" }) => {
                   >
                     HCP Type: {filters.hcpType}
                   </span>
-                  <ChevronDown className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-[#0460A9]" : "text-gray-500"}`} />
+                  <ChevronDown
+                    className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-[#0460A9]" : "text-gray-500"}`}
+                  />
                 </div>
                 {openDropdown === "hcpType" && (
                   <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[1000] w-48 max-h-40 overflow-y-auto">
@@ -792,7 +802,8 @@ const ReferOut = ({ referType = "HCP" }) => {
                     {filterOptions.hcpSpecialties.map((specialty, i) => (
                       <div
                         key={i}
-                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
+                        className={`p-2 text-[12px] hover:bg-
+                        className={\`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
                           filters.hcpSpecialty === specialty ? "bg-blue-50 text-blue-600" : ""
                         }`}
                         onClick={() => handleFilterChange("hcpSpecialty", specialty)}
@@ -1009,7 +1020,18 @@ const ReferOut = ({ referType = "HCP" }) => {
                   }`}
                   onClick={() => handleEntitySelect("rendering", entity.name)}
                 >
-                  <span className="text-[10px] text-gray-800">{entity.name}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-800">{entity.name}
+                    {selectedEntity.referring && (
+                      <span
+                        className={`text-[8px] px-1 py-0.5 rounded ${entity.isWithinOrg ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+                      >
+                        {entity.isWithinOrg ? "Within" : "Outside"}
+                      </span>
+                    )}
+                    </span>
+                    
+                  </div>
                   <span className="text-[10px] text-gray-800">{entity.count}</span>
                 </div>
               ))
