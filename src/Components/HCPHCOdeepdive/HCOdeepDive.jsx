@@ -21,7 +21,6 @@ import { useLocation } from "react-router-dom"
 import * as d3 from "d3"
 import api from "../api/api"
 
-
 const HCOdeepDive = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -118,11 +117,7 @@ const HCOdeepDive = () => {
         processHCOData(data)
 
         // Fetch referral data separately
-        const referralUrl = `${api}/hco-360?ref_hco_npi_mdm=${encodeURIComponent(hcoMdm)}`
-        const referralResponse = await fetch(referralUrl)
-        const referralData = await referralResponse.json()
-
-        processReferralData(referralData)
+        fetchReferralData()
       } catch (error) {
         console.error("Error fetching HCO data:", error)
       } finally {
@@ -133,12 +128,39 @@ const HCOdeepDive = () => {
     fetchHCOData()
   }, [hcoMdm])
 
+  // Fetch referral data when years change
+  const fetchReferralData = async () => {
+    try {
+      setReferralLoading(true)
+      const referralUrl = `${api}/hco-360?ref_hco_npi_mdm=${encodeURIComponent(hcoMdm)}`
+      const referralResponse = await fetch(referralUrl)
+      let referralData = await referralResponse.json()
+
+      // Filter referral data by year if years are selected
+      if (selectedYears.length > 0) {
+        referralData = referralData.filter((item) => selectedYears.includes(item.year))
+      }
+
+      processReferralData(referralData)
+    } catch (error) {
+      console.error("Error fetching referral data:", error)
+      setReferralLoading(false)
+    }
+  }
+
   // Update processed data when filters change
   useEffect(() => {
     if (interactiveFilteredData.length > 0) {
       processHCOData(interactiveFilteredData)
     }
   }, [interactiveFilteredData])
+
+  // Re-fetch referral data when years change
+  useEffect(() => {
+    fetchReferralData()
+    // Reset the graph rendered flag when changing years
+    graphRenderedRef.current = false
+  }, [selectedYears])
 
   const processHCOData = (data) => {
     if (data && data.length > 0) {
@@ -358,67 +380,66 @@ const HCOdeepDive = () => {
     }
   }
 
- // The processReferralData function needs to be updated to use the hco_mdm_name field correctly
-const processReferralData = (data) => {
-  if (!data || data.length === 0) {
-    setAllReferralData([])
-    filterReferralData("all", [])
+  // The processReferralData function needs to be updated to use the hco_mdm_name field correctly
+  const processReferralData = (data) => {
+    if (!data || data.length === 0) {
+      setAllReferralData([])
+      filterReferralData("all", [])
+      setReferralLoading(false)
+      return
+    }
+
+    // Group by referring organization to get unique referring HCOs
+    const referralMap = new Map()
+
+    data.forEach((record) => {
+      // Get the referring organization name from hco_mdm_name as requested
+      const refOrgName = record.hco_mdm_name || "Unknown Organization"
+
+      // Skip if the referring organization is missing or "-"
+      if (refOrgName === "-") return
+
+      // Get the within/outside status directly from the API field
+      const withinOutsideStatus = record.within_outside_hco_referral || "UNSPECIFIED"
+
+      // Determine if this is within or outside based on the field value
+      const isWithinInstitute = withinOutsideStatus === "WITHIN"
+
+      // Skip UNSPECIFIED if filtering by within/outside
+      if (withinOutsideStatus === "UNSPECIFIED" && activeTab !== "all") return
+
+      const key = refOrgName
+
+      if (!referralMap.has(key)) {
+        referralMap.set(key, {
+          accountName: refOrgName,
+          patients: new Set(),
+          isWithinInstitute: isWithinInstitute,
+          withinOutsideStatus: withinOutsideStatus,
+        })
+      }
+
+      // Add patient ID to the set if it exists
+      if (record.patient_id) {
+        referralMap.get(key).patients.add(record.patient_id)
+      }
+    })
+
+    // Convert to array with patient counts
+    const referralArray = Array.from(referralMap.values()).map((item) => ({
+      accountName: item.accountName,
+      patientCount: item.patients.size,
+      isWithinInstitute: item.isWithinInstitute,
+      withinOutsideStatus: item.withinOutsideStatus,
+    }))
+
+    // Sort by patient count
+    referralArray.sort((a, b) => b.patientCount - a.patientCount)
+
+    setAllReferralData(referralArray)
+    filterReferralData(activeTab, referralArray)
     setReferralLoading(false)
-    return
   }
-
-  // Group by referring organization to get unique referring HCOs
-  const referralMap = new Map()
-
-  data.forEach((record) => {
-    // Get the referring organization name from hco_mdm_name as requested
-    const refOrgName = record.hco_mdm_name || "Unknown Organization"
-
-    // Skip if the referring organization is missing or "-"
-    if (refOrgName === "-") return
-
-    // Get the within/outside status directly from the API field
-    const withinOutsideStatus = record.within_outside_hco_referral || "UNSPECIFIED"
-
-    // Determine if this is within or outside based on the field value
-    const isWithinInstitute = withinOutsideStatus === "WITHIN"
-
-    // Skip UNSPECIFIED if filtering by within/outside
-    if (withinOutsideStatus === "UNSPECIFIED" && activeTab !== "all") return
-
-    const key = refOrgName
-
-    if (!referralMap.has(key)) {
-      referralMap.set(key, {
-        accountName: refOrgName,
-        patients: new Set(),
-        isWithinInstitute: isWithinInstitute,
-        withinOutsideStatus: withinOutsideStatus,
-      })
-    }
-
-    // Add patient ID to the set if it exists
-    if (record.patient_id) {
-      referralMap.get(key).patients.add(record.patient_id)
-    }
-  })
-
-  // Convert to array with patient counts
-  const referralArray = Array.from(referralMap.values()).map((item) => ({
-    accountName: item.accountName,
-    patientCount: item.patients.size,
-    isWithinInstitute: item.isWithinInstitute,
-    withinOutsideStatus: item.withinOutsideStatus,
-  }))
-
-  // Sort by patient count
-  referralArray.sort((a, b) => b.patientCount - a.patientCount)
-
-  setAllReferralData(referralArray)
-  filterReferralData(activeTab, referralArray)
-  setReferralLoading(false)
-}
-
 
   // Filter referral data based on active tab
   const filterReferralData = (tab, data = allReferralData) => {
@@ -703,7 +724,20 @@ const processReferralData = (data) => {
         .attr("stroke", "#fff")
         .attr("stroke-width", 1.5)
 
-      // Add text labels
+      // Add patient count inside the node for referred HCOs
+      nodeGroups
+        .filter((d) => d.type === "referred")
+        .append("text")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "10px")
+        .attr("font-weight", "bold")
+        .attr("fill", "#fff")
+        .attr("dy", ".35em")
+        .text((d) => d.patients)
+
+      // Add text labels for node names
       nodeGroups
         .append("text")
         .attr("x", (d) => (d.level === 0 ? -35 : 20))
@@ -715,7 +749,7 @@ const processReferralData = (data) => {
         .attr("dy", ".35em")
         .text((d) => d.name)
 
-      // Add patient count and within/outside indicator for referred HCO nodes
+      // Add within/outside indicator for referred HCO nodes
       nodeGroups
         .filter((d) => d.type === "referred")
         .append("text")
@@ -730,7 +764,7 @@ const processReferralData = (data) => {
           else if (d.withinOutsideStatus === "OUTSIDE") status = "Outside"
           else status = "Unspecified"
 
-          return `Patients: ${d.patients} (${status})`
+          return status
         })
 
       // Add zoom instructions
@@ -742,34 +776,6 @@ const processReferralData = (data) => {
         .attr("font-size", "10px")
         .attr("fill", "#666")
         .text("Use mouse wheel to zoom, drag to pan")
-
-      // Create dynamic legend for referred HCOs
-      // const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right - 120}, 20)`)
-
-      // // Add legend title
-      // legendGroup
-      //   .append("text")
-      //   .attr("x", 0)
-      //   .attr("y", 0)
-      //   .attr("font-size", "10px")
-      //   .attr("font-weight", "bold")
-      //   .text("Referred HCOs")
-
-      // // Add legend items (limit to 10 to avoid overcrowding)
-      // const legendItems = referralData.slice(0, 10)
-
-      // legendItems.forEach((item, i) => {
-      //   const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 15 + 15})`)
-
-      //   g.append("circle").attr("r", 5).attr("fill", colorScale(item.accountName))
-
-      //   g.append("text")
-      //     .attr("x", 10)
-      //     .attr("y", 0)
-      //     .attr("dy", ".35em")
-      //     .attr("font-size", "8px")
-      //     .text(item.accountName.length > 20 ? item.accountName.substring(0, 20) + "..." : item.accountName)
-      // })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -1235,6 +1241,7 @@ const processReferralData = (data) => {
               {/* Instructions */}
               <div className="text-gray-500 text-[10px] mt-2 px-2">
                 <p>* Node size indicates number of patients referred</p>
+                <p>* Patient count is shown inside the node</p>
                 <p>* Use mouse wheel to zoom, drag to pan</p>
               </div>
             </div>

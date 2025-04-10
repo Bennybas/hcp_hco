@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Cell } from "recharts"
@@ -30,6 +30,11 @@ const HCPdeepDive = () => {
   const [availableYears, setAvailableYears] = useState([])
   const [selectedYears, setSelectedYears] = useState([])
 
+  // Specialty filter for referrals
+  const [availableSpecialties, setAvailableSpecialties] = useState([])
+  const [selectedSpecialties, setSelectedSpecialties] = useState([])
+  const [showSpecialtyDropdown, setShowSpecialtyDropdown] = useState(false)
+
   // Filters for interactive charts
   const [selectedDrug, setSelectedDrug] = useState(null)
   const [selectedAgeGroup, setSelectedAgeGroup] = useState(null)
@@ -39,6 +44,8 @@ const HCPdeepDive = () => {
   const networkRef = useRef(null)
   // Ref to track if the graph has been rendered
   const graphRenderedRef = useRef(false)
+  // Ref for specialty dropdown
+  const specialtyDropdownRef = useRef(null)
 
   // Filtered data based on year selection
   const filteredHcpData = useMemo(() => {
@@ -70,6 +77,25 @@ const HCPdeepDive = () => {
 
     return filtered
   }, [filteredHcpData, selectedDrug, selectedAgeGroup])
+
+  // Filtered referral data based on specialty selection
+  const filteredReferralData = useMemo(() => {
+    if (selectedSpecialties.length === 0) return referralData
+    return referralData.filter((item) => selectedSpecialties.includes(item.specialty))
+  }, [referralData, selectedSpecialties])
+
+  // Close specialty dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (specialtyDropdownRef.current && !specialtyDropdownRef.current.contains(event.target)) {
+        setShowSpecialtyDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchHCPData = async () => {
@@ -117,7 +143,13 @@ const HCPdeepDive = () => {
         const response = await fetch(referralUrl)
         const data = await response.json()
 
-        processReferralData(data)
+        // Filter referral data by year if years are selected
+        let filteredData = data
+        if (selectedYears.length > 0) {
+          filteredData = data.filter((item) => selectedYears.includes(item.year))
+        }
+
+        processReferralData(filteredData)
       } catch (error) {
         console.error("Error fetching referral data:", error)
       } finally {
@@ -126,13 +158,14 @@ const HCPdeepDive = () => {
     }
 
     fetchReferralData()
-  }, [hcpNPI])
+  }, [hcpNPI, selectedYears]) // Re-fetch when years change
 
   // Process referral data
   const processReferralData = (data) => {
     if (!data || data.length === 0) {
       setAllReferralData([])
       setReferralData([])
+      setAvailableSpecialties([])
       return
     }
 
@@ -170,6 +203,16 @@ const HCPdeepDive = () => {
     // Sort by patient count
     referralArray.sort((a, b) => b.patientsReferred - a.patientsReferred)
 
+    // Extract unique specialties for the filter
+    const specialties = [...new Set(referralArray.map((item) => item.specialty))]
+      .filter((specialty) => specialty !== "Unknown")
+      .sort()
+
+    if (!specialties.includes("Unknown") && referralArray.some((item) => item.specialty === "Unknown")) {
+      specialties.push("Unknown")
+    }
+
+    setAvailableSpecialties(specialties)
     setAllReferralData(referralArray)
     filterReferralData(activeTab, referralArray)
   }
@@ -207,6 +250,21 @@ const HCPdeepDive = () => {
         }
       })
     }
+    // Reset the graph rendered flag when changing years
+    graphRenderedRef.current = false
+  }
+
+  // Handle specialty selection
+  const handleSpecialtyToggle = (specialty) => {
+    setSelectedSpecialties((prev) => {
+      if (prev.includes(specialty)) {
+        return prev.filter((s) => s !== specialty)
+      } else {
+        return [...prev, specialty]
+      }
+    })
+    // Reset the graph rendered flag when changing specialties
+    graphRenderedRef.current = false
   }
 
   // Handle chart item click
@@ -240,15 +298,16 @@ const HCPdeepDive = () => {
     setSelectedDrug(null)
     setSelectedAgeGroup(null)
     setSelectedScientificActivity(null)
+    setSelectedSpecialties([])
   }
 
   // Effect to render the network graph when referral data changes
   useEffect(() => {
-    if (networkRef.current && !graphRenderedRef.current) {
+    if (networkRef.current && !graphRenderedRef.current && !referralLoading) {
       renderNetworkGraph()
       graphRenderedRef.current = true
     }
-  }, [referralData])
+  }, [filteredReferralData, referralLoading])
 
   const renderNetworkGraph = () => {
     try {
@@ -258,7 +317,7 @@ const HCPdeepDive = () => {
         container.selectAll("svg").remove()
       }
 
-      if (referralData.length === 0) return
+      if (filteredReferralData.length === 0) return
 
       // Set up dimensions
       const width = networkRef.current.clientWidth
@@ -304,7 +363,7 @@ const HCPdeepDive = () => {
 
       // Group referred HCPs by affiliated account
       const accountGroups = {}
-      referralData.forEach((hcp) => {
+      filteredReferralData.forEach((hcp) => {
         if (!accountGroups[hcp.affiliatedAccount]) {
           accountGroups[hcp.affiliatedAccount] = []
         }
@@ -320,7 +379,7 @@ const HCPdeepDive = () => {
         .scaleOrdinal()
         .domain(Object.keys(accountGroups))
         .range([
-          "#63f7ad",
+          "#7ab0eb",
           "#f28e2b",
           "#e15759",
           "#76b7b2",
@@ -472,11 +531,11 @@ const HCPdeepDive = () => {
         .attr("stroke", "#fff")
         .attr("stroke-width", 1.5)
 
-      // Add text labels
+      // Add name labels ABOVE the node
       nodeGroups
         .append("text")
         .attr("x", (d) => (d.level === 0 ? -35 : d.level === 2 ? 20 : 0))
-        .attr("y", (d) => (d.level === 1 ? -20 : 0))
+        .attr("y", (d) => (d.level === 1 ? -25 : d.level === 0 ? -10 : 0))
         .attr("text-anchor", (d) => (d.level === 0 ? "end" : d.level === 2 ? "start" : "middle"))
         .attr("font-size", "11px")
         .attr("font-weight", "500")
@@ -484,28 +543,30 @@ const HCPdeepDive = () => {
         .attr("dy", ".35em")
         .text((d) => d.name)
 
-      // Add specialty labels for HCP nodes
+      // Add patient count INSIDE the node for referred HCPs
       nodeGroups
         .filter((d) => d.type === "referred")
         .append("text")
         .attr("x", 0)
         .attr("y", 0)
         .attr("text-anchor", "middle")
-        .attr("font-size", "9px")
-        .attr("fill", "#555")
+        .attr("font-size", "10px")
+        .attr("font-weight", "bold")
+        .attr("fill", "#fff")
         .attr("dy", ".35em")
-        .text((d) => d.specialty)
+        .text((d) => d.patients)
 
-      // Add patient count for referred HCPs
+      // Add specialty labels BELOW the node
       nodeGroups
         .filter((d) => d.type === "referred")
         .append("text")
         .attr("x", 0)
-        .attr("y", 20)
+        .attr("y", 25)
         .attr("text-anchor", "middle")
         .attr("font-size", "9px")
         .attr("fill", "#555")
-        .text((d) => `Patients: ${d.patients}`)
+        .attr("dy", ".35em")
+        .text((d) => d.specialty)
 
       // Add zoom instructions
       svg
@@ -756,7 +817,11 @@ const HCPdeepDive = () => {
             </button>
           ))}
 
-          {(selectedYears.length > 0 || selectedDrug || selectedAgeGroup || selectedScientificActivity) && (
+          {(selectedYears.length > 0 ||
+            selectedDrug ||
+            selectedAgeGroup ||
+            selectedScientificActivity ||
+            selectedSpecialties.length > 0) && (
             <button
               onClick={clearAllFilters}
               className="ml-2 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full hover:bg-blue-100"
@@ -774,8 +839,8 @@ const HCPdeepDive = () => {
           {/* Background Image (HCP-HCO) */}
           <img src="hcp-hco.jpg" alt="hcp-hco" className="h-16 w-full rounded-t-2xl" />
 
-          <div className="absolute -mt-8 ml-3">
-            <img src="image.jpg" alt="img" className="h-20 w-20 rounded-full" />
+          <div className="absolute -mt-8 ml-3 bg-white rounded-full h-20 w-20 border broder-[#D2D2D2] p-2 items-center justify-center flex">
+            <img src="doctor_stethoscope.svg" alt="img" className="h-8 w-8" />
           </div>
 
           {/* HCP Details */}
@@ -980,8 +1045,8 @@ const HCPdeepDive = () => {
             <hr className="border-gray-300 w-full -mt-6" />
 
             <div className="p-4">
-              <div className="flex gap-2 items-center py-2">
-                <div className="text-gray-700 text-[11px] font-medium ">Patients Referral</div>
+              <div className="flex flex-wrap gap-2 items-center py-2">
+                <div className="text-gray-700 text-[11px] font-medium">Patients Referral</div>
 
                 <div className="flex space-x-2">
                   <button
@@ -1003,6 +1068,45 @@ const HCPdeepDive = () => {
                     Outside Institute
                   </button>
                 </div>
+
+                {/* Specialty Filter Dropdown */}
+                <div className="relative ml-auto" ref={specialtyDropdownRef}>
+                  <button
+                    className="flex items-center justify-between w-48 px-3 py-2 text-[10px] bg-white border rounded-md shadow-sm hover:bg-gray-50"
+                    onClick={() => setShowSpecialtyDropdown(!showSpecialtyDropdown)}
+                  >
+                    <span>
+                      {selectedSpecialties.length === 0
+                        ? "Filter by Specialty"
+                        : `${selectedSpecialties.length} specialties selected`}
+                    </span>
+                    <ChevronsUpDown className="w-4 h-4 ml-2 opacity-50" />
+                  </button>
+                  {showSpecialtyDropdown && (
+                    <div className="absolute right-0 z-10 w-48 mt-1 bg-white border rounded-md shadow-lg">
+                      <div className="p-2 max-h-60 overflow-auto">
+                        {availableSpecialties.map((specialty) => (
+                          <div
+                            key={specialty}
+                            className="flex items-center px-2 py-1 text-[10px] hover:bg-gray-100 cursor-pointer"
+                            onClick={() => handleSpecialtyToggle(specialty)}
+                          >
+                            <div
+                              className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                                selectedSpecialties.includes(specialty)
+                                  ? "bg-blue-500 border-blue-500"
+                                  : "border-gray-300"
+                              }`}
+                            >
+                              {selectedSpecialties.includes(specialty) && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                            <span>{specialty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Network Graph Container */}
@@ -1014,7 +1118,7 @@ const HCPdeepDive = () => {
                   <div className="flex justify-center items-center h-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>
-                ) : referralData.length === 0 ? (
+                ) : filteredReferralData.length === 0 ? (
                   <div className="flex justify-center items-center h-full text-gray-500 text-sm">
                     No referral data available
                   </div>
@@ -1037,7 +1141,7 @@ const HCPdeepDive = () => {
               {/* Instructions */}
               <div className="text-gray-500 text-[10px] mt-2 px-2">
                 <p>* Node size indicates number of patients referred</p>
-                <p>* HCPs and their affiliated HCOs share the same color</p>
+                <p>* Patient count is shown inside the node</p>
                 <p>* Use mouse wheel to zoom, drag to pan</p>
               </div>
             </div>

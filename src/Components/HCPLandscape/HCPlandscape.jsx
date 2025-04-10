@@ -506,11 +506,11 @@ const HCPlandscape = () => {
     }
 
     const labelMap = {
-      HIGH: "High Potential",
-      MEDIUM: "Medium Potential",
-      LOW: "Low Potential",
-      "V-LOW": "Very Low Potential",
-      "VERY LOW": "Very Low Potential",
+      HIGH: "HIGH",
+      MEDIUM: "MEDIUM",
+      LOW: "LOW",
+      "V-LOW": "V-LOW",
+      "VERY LOW": "V-LOW",
     }
 
     // Convert map to array and format for the chart
