@@ -598,8 +598,8 @@ const AccountLandscape = () => {
           )}
         </div>
 
-        {/* KOL Filter */}
-        <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
+       
+        {/* <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">KOL</span>
           <button
             onClick={() => toggleFilter("kol", "Yes")}
@@ -615,7 +615,7 @@ const AccountLandscape = () => {
           </button>
         </div>
 
-        {/* Zolgensma Prescriber Filter */}
+       
         <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">Zolgensma Prescriber</span>
           <button
@@ -632,7 +632,7 @@ const AccountLandscape = () => {
           </button>
         </div>
 
-        {/* Zolgensma IV Target Filter */}
+
         <div className="flex items-center rounded-xl border py-1 gap-2 bg-white px-2">
           <span className="text-gray-600 text-[10px]">Zolgensma IV Target</span>
           <button
@@ -647,7 +647,7 @@ const AccountLandscape = () => {
           >
             No
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* KPI Cards */}
@@ -825,7 +825,7 @@ const AccountLandscape = () => {
             <span className="text-gray-500 text-[11px] font-[500]">HCO Group by Patient</span>
           </div>
           <ResponsiveContainer width="90%" height="100%">
-            <BarChart layout="vertical" data={facilityTypeData} margin={{ top: 10, right: 30, left: -12, bottom: 10 }}>
+            <BarChart layout="vertical" data={facilityTypeData} margin={{ top: 10, right: 30, bottom: 10 }}>
               <XAxis type="number" tick={{ fontSize: 10 }} hide />
               <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
               <Tooltip wrapperStyle={{ fontSize: "10px" }} />

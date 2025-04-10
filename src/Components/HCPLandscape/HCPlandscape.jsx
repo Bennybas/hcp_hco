@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
-import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 
@@ -37,6 +37,10 @@ const HCPlandscape = () => {
     selectedQuarter: null, // For quarter filtering
     selectedYear: null, // For year filtering
     segment: null, // For segment filtering
+    selectedDrug: null, // For individual drug filtering
+    selectedAgeGroup: null, // For individual age group filtering
+    selectedSpecialty: null, // For individual specialty filtering
+    selectedPotentialDrug: null, // For individual drug in potential chart
   })
 
   // Filter options
@@ -122,7 +126,7 @@ const HCPlandscape = () => {
         }
       }
 
-      // Quarter and Year filter - this is the fixed part
+      // Quarter and Year filter
       if (filters.selectedQuarter !== null && filters.selectedYear !== null) {
         // Convert to string for comparison since API data might have string values
         const itemYear = String(item.year)
@@ -135,8 +139,62 @@ const HCPlandscape = () => {
         }
       }
 
+      // Individual drug filter for specific quarter-year combination
+      if (filters.selectedDrug !== null && filters.selectedQuarter !== null && filters.selectedYear !== null) {
+        // Convert to string for comparison since API data might have string values
+        const itemYear = String(item.year)
+        const itemQuarter = String(item.quarter)
+        const filterYear = String(filters.selectedYear)
+        const filterQuarter = String(filters.selectedQuarter)
+
+        if (itemYear !== filterYear || itemQuarter !== filterQuarter || item.drug_name !== filters.selectedDrug) {
+          return false
+        }
+      }
+
       // Segment filter
       if (filters.segment && item.hcp_segment !== filters.segment) return false
+
+      // Age group filter
+      if (filters.selectedAgeGroup) {
+        const ageMapping = {
+          "<2": "0 to 2",
+          "3-17": "3 to 17",
+          ">18": "Above 18",
+        }
+
+        if (item.age_group !== ageMapping[filters.selectedAgeGroup]) return false
+      }
+
+      // Specialty filter
+      if (filters.selectedSpecialty) {
+        const specialtyMapping = {
+          "Child Neurology": "CHILD NEUROLOGY",
+          Neurology: "NEUROLOGY",
+          Neuromuscular: "NEUROMUSCULAR",
+          Pediatric: "PEDIATRIC",
+          Radiology: "RADIOLOGY",
+          "NP/PA": "NP/PA",
+        }
+
+        const apiSpecialty = specialtyMapping[filters.selectedSpecialty]
+        if (!apiSpecialty) {
+          // Handle "All Others" case
+          if (filters.selectedSpecialty === "All Others") {
+            const mainSpecialties = Object.values(specialtyMapping)
+            if (mainSpecialties.includes(item.final_spec?.toUpperCase())) return false
+          } else {
+            return false
+          }
+        } else if (item.final_spec?.toUpperCase() !== apiSpecialty) {
+          return false
+        }
+      }
+
+      // Potential drug filter
+      if (filters.selectedPotentialDrug && item.drug_name !== filters.selectedPotentialDrug) {
+        return false
+      }
 
       return true
     })
@@ -477,62 +535,64 @@ const HCPlandscape = () => {
   }
 
   const processPotentialData = (data) => {
-    // Create a Map to track unique HCP IDs for each segment
-    const segmentHcpMap = new Map()
+    // Create a Map to track unique HCP IDs for each segment and drug
+    const segmentDrugPatientMap = new Map()
 
     // Process each record
     data.forEach((item) => {
-      if (item.hcp_segment && item.rend_npi && item.hcp_segment !== "-" && item.rend_npi !== "-") {
+      if (
+        item.hcp_segment &&
+        item.drug_name &&
+        item.patient_id &&
+        item.hcp_segment !== "-" &&
+        item.drug_name !== "-" &&
+        item.patient_id !== "-"
+      ) {
         // Normalize segment name (uppercase for consistency)
         const segment = item.hcp_segment.toUpperCase()
+        const drug = item.drug_name
 
-        // Initialize set for this segment if it doesn't exist
-        if (!segmentHcpMap.has(segment)) {
-          segmentHcpMap.set(segment, new Set())
+        // Create key for segment-drug combination
+        const key = `${segment}_${drug}`
+
+        // Initialize set for this segment-drug if it doesn't exist
+        if (!segmentDrugPatientMap.has(key)) {
+          segmentDrugPatientMap.set(key, new Set())
         }
 
-        // Add HCP ID to the set for this segment
-        segmentHcpMap.get(segment).add(item.rend_npi)
+        // Add patient ID to the set for this segment-drug
+        segmentDrugPatientMap.get(key).add(item.patient_id)
       }
     })
 
-    // Map segments to colors and labels
-    const colorMap = {
-      HIGH: "#B073FE",
-      MEDIUM: "#FDBA74",
-      LOW: "#B4F06C",
-      "V-LOW": "#6EE79A",
-      "VERY LOW": "#6EE79A",
-    }
+    // Get unique segments
+    const segments = [...new Set(data.map((item) => item.hcp_segment).filter((s) => s && s !== "-"))]
 
-    const labelMap = {
-      HIGH: "HIGH",
-      MEDIUM: "MEDIUM",
-      LOW: "LOW",
-      "V-LOW": "V-LOW",
-      "VERY LOW": "V-LOW",
-    }
+    // Sort segments in the correct order: HIGH, MEDIUM, LOW, V-LOW
+    const segmentOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3, "VERY LOW": 3 }
 
-    // Convert map to array and format for the chart
-    const result = Array.from(segmentHcpMap).map(([segment, hcpSet]) => ({
-      label: labelMap[segment] || segment,
-      value: hcpSet.size,
-      color: colorMap[segment] || "#000000",
-      segment: segment, // Store original segment for filtering
-    }))
-
-    // Sort by predefined order: High, Moderate, Low, V. Low
-    const orderMap = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3, "VERY LOW": 3 }
-
-    result.sort((a, b) => {
-      const aSegment = Object.keys(labelMap).find((key) => labelMap[key] === a.label) || ""
-      const bSegment = Object.keys(labelMap).find((key) => labelMap[key] === b.label) || ""
-      const aOrder = orderMap[aSegment] ?? 999
-      const bOrder = orderMap[bSegment] ?? 999
-      return aOrder - bOrder
+    const sortedSegments = segments.sort((a, b) => {
+      const orderA = segmentOrder[a] !== undefined ? segmentOrder[a] : 999
+      const orderB = segmentOrder[b] !== undefined ? segmentOrder[b] : 999
+      return orderA - orderB
     })
 
-    setPotentialData(result)
+    // Format data for stacked bar chart
+    const formattedData = sortedSegments.map((segment) => {
+      const result = { segment }
+
+      // Count patients for each drug in this segment
+      result.Zolgensma = segmentDrugPatientMap.get(`${segment}_ZOLGENSMA`)?.size || 0
+      result.Spinraza = segmentDrugPatientMap.get(`${segment}_SPINRAZA`)?.size || 0
+      result.Evrysdi = segmentDrugPatientMap.get(`${segment}_EVRYSDI`)?.size || 0
+
+      // Calculate total
+      result.total = result.Zolgensma + result.Spinraza + result.Evrysdi
+
+      return result
+    })
+
+    setPotentialData(formattedData)
   }
 
   const processTableData = (data) => {
@@ -624,19 +684,123 @@ const HCPlandscape = () => {
     setCurrentPage(1)
   }
 
-  // Handle bar click for QoQ Patients By Brand chart
-  const handleBrandBarClick = (data) => {
+  // Handle individual bar click for QoQ Patients By Brand chart
+  const handleIndividualBarClick = (data, dataKey) => {
     // Extract year and quarter from the clicked bar
     const year = data.year
     const quarterMatch = data.quarter.match(/Q(\d+)/)
     const quarter = quarterMatch ? quarterMatch[1] : null
 
-    if (year && quarter) {
-      setFilters((prev) => ({
-        ...prev,
-        selectedYear: year,
-        selectedQuarter: quarter,
-      }))
+    // Map dataKey to actual drug name in the database
+    const drugMap = {
+      Zolgensma: "ZOLGENSMA",
+      Spinraza: "SPINRAZA",
+      Evrysdi: "EVRYSDI",
+    }
+
+    const drugName = drugMap[dataKey]
+
+    if (year && quarter && drugName) {
+      // Check if we're already filtering by this exact combination
+      if (filters.selectedYear === year && filters.selectedQuarter === quarter && filters.selectedDrug === drugName) {
+        // Clear the filters if clicking the same bar again
+        setFilters((prev) => ({
+          ...prev,
+          selectedYear: null,
+          selectedQuarter: null,
+          selectedDrug: null,
+        }))
+      } else {
+        // Set the filters for this specific drug and quarter-year combination
+        setFilters((prev) => ({
+          ...prev,
+          selectedYear: year,
+          selectedQuarter: quarter,
+          selectedDrug: drugName,
+        }))
+      }
+    }
+  }
+
+  // Handle individual bar click for Potential chart
+  const handlePotentialBarClick = (data, dataKey) => {
+    // Map dataKey to actual drug name in the database
+    const drugMap = {
+      Zolgensma: "ZOLGENSMA",
+      Spinraza: "SPINRAZA",
+      Evrysdi: "EVRYSDI",
+    }
+
+    const drugName = drugMap[dataKey]
+    const segment = data.segment
+
+    if (segment && drugName) {
+      // Check if we're already filtering by this exact combination
+      if (filters.segment === segment && filters.selectedPotentialDrug === drugName) {
+        // Clear the filters if clicking the same bar again
+        setFilters((prev) => ({
+          ...prev,
+          segment: null,
+          selectedPotentialDrug: null,
+        }))
+      } else {
+        // Set the filters for this specific drug and segment combination
+        setFilters((prev) => ({
+          ...prev,
+          segment: segment,
+          selectedPotentialDrug: drugName,
+        }))
+      }
+    }
+  }
+
+  // Handle individual bar click for Age Group chart
+  const handleAgeGroupBarClick = (data, dataKey) => {
+    const segment = data.segment
+    const ageGroup = dataKey // "<2", "3-17", or ">18"
+
+    if (segment && ageGroup) {
+      // Check if we're already filtering by this exact combination
+      if (filters.segment === segment && filters.selectedAgeGroup === ageGroup) {
+        // Clear the filters if clicking the same bar again
+        setFilters((prev) => ({
+          ...prev,
+          segment: null,
+          selectedAgeGroup: null,
+        }))
+      } else {
+        // Set the filters for this specific age group and segment combination
+        setFilters((prev) => ({
+          ...prev,
+          segment: segment,
+          selectedAgeGroup: ageGroup,
+        }))
+      }
+    }
+  }
+
+  // Handle individual bar click for Specialty chart
+  const handleSpecialtyBarClick = (data, dataKey) => {
+    const segment = data.segment
+    const specialty = dataKey // "Child Neurology", "Neurology", etc.
+
+    if (segment && specialty) {
+      // Check if we're already filtering by this exact combination
+      if (filters.segment === segment && filters.selectedSpecialty === specialty) {
+        // Clear the filters if clicking the same bar again
+        setFilters((prev) => ({
+          ...prev,
+          segment: null,
+          selectedSpecialty: null,
+        }))
+      } else {
+        // Set the filters for this specific specialty and segment combination
+        setFilters((prev) => ({
+          ...prev,
+          segment: segment,
+          selectedSpecialty: specialty,
+        }))
+      }
     }
   }
 
@@ -659,6 +823,10 @@ const HCPlandscape = () => {
       selectedQuarter: null,
       selectedYear: null,
       segment: null,
+      selectedDrug: null,
+      selectedAgeGroup: null,
+      selectedSpecialty: null,
+      selectedPotentialDrug: null,
     })
   }
 
@@ -685,9 +853,6 @@ const HCPlandscape = () => {
     setCurrentPage(page)
     updatePaginatedData(allTableData, page, rowsPerPage)
   }
-
-  // Calculate max value for potential data
-  const maxValue = potential_data.length > 0 ? Math.max(...potential_data.map((item) => item.value), 0) : 0
 
   // Navigate to HCP details
   const getHCPDetails = (hcpName) => {
@@ -717,7 +882,11 @@ const HCPlandscape = () => {
       filters.ages.length > 0 ||
       filters.states.length > 0 ||
       filters.selectedQuarter !== null ||
-      filters.segment !== null
+      filters.segment !== null ||
+      filters.selectedDrug !== null ||
+      filters.selectedAgeGroup !== null ||
+      filters.selectedSpecialty !== null ||
+      filters.selectedPotentialDrug !== null
     )
   }
 
@@ -885,8 +1054,11 @@ const HCPlandscape = () => {
           {filters.selectedQuarter !== null && filters.selectedYear !== null && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               Quarter: {filters.selectedYear}-Q{filters.selectedQuarter}
+              {filters.selectedDrug && ` (${filters.selectedDrug})`}
               <button
-                onClick={() => setFilters((prev) => ({ ...prev, selectedQuarter: null, selectedYear: null }))}
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, selectedQuarter: null, selectedYear: null, selectedDrug: null }))
+                }
                 className="ml-1 text-blue-600 hover:text-blue-800"
               >
                 <X size={12} />
@@ -897,8 +1069,19 @@ const HCPlandscape = () => {
           {filters.segment && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               Segment: {filters.segment}
+              {filters.selectedAgeGroup && ` (Age: ${filters.selectedAgeGroup})`}
+              {filters.selectedSpecialty && ` (Specialty: ${filters.selectedSpecialty})`}
+              {filters.selectedPotentialDrug && ` (Drug: ${filters.selectedPotentialDrug})`}
               <button
-                onClick={() => setFilters((prev) => ({ ...prev, segment: null }))}
+                onClick={() =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    segment: null,
+                    selectedAgeGroup: null,
+                    selectedSpecialty: null,
+                    selectedPotentialDrug: null,
+                  }))
+                }
                 className="ml-1 text-blue-600 hover:text-blue-800"
               >
                 <X size={12} />
@@ -1000,7 +1183,7 @@ const HCPlandscape = () => {
           </div>
         </div>
         <ResponsiveContainer width="100%" height="90%">
-          <BarChart data={brandData} margin={{ top: 20, right: 30, left: -20, bottom: 5 }}>
+          <BarChart data={brandData} margin={{ top: 20, right: 30, left: -20, bottom: 5 }} barSize={30}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="quarter" tick={{ fontSize: 10 }} interval={0} tickFormatter={(value) => value} />
             <XAxis
@@ -1018,22 +1201,22 @@ const HCPlandscape = () => {
             <Bar
               dataKey="Zolgensma"
               stackId="a"
-              fill="#8E58B3"
-              onClick={(data) => handleBrandBarClick(data)}
+              fill={filters.selectedDrug === "ZOLGENSMA" ? "#6a3d81" : "#8E58B3"}
+              onClick={(data) => handleIndividualBarClick(data, "Zolgensma")}
               cursor="pointer"
             />
             <Bar
               dataKey="Spinraza"
               stackId="a"
-              fill="#2A9FB0"
-              onClick={(data) => handleBrandBarClick(data)}
+              fill={filters.selectedDrug === "SPINRAZA" ? "#1c6f7c" : "#2A9FB0"}
+              onClick={(data) => handleIndividualBarClick(data, "Spinraza")}
               cursor="pointer"
             />
             <Bar
               dataKey="Evrysdi"
               stackId="a"
-              fill="#D50057"
-              onClick={(data) => handleBrandBarClick(data)}
+              fill={filters.selectedDrug === "EVRYSDI" ? "#9c003f" : "#D50057"}
+              onClick={(data) => handleIndividualBarClick(data, "Evrysdi")}
               cursor="pointer"
             >
               <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
@@ -1048,37 +1231,51 @@ const HCPlandscape = () => {
           <span className="text-gray-500 text-[11px] font-[500] pb-4">
             Prescriber Cluster by Treated Patient Volume
           </span>
-          <div className="flex flex-col w-full h-64 p-2">
-            <div className="flex-grow">
-              {potential_data.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={potential_data}
-                    margin={{ top: 10, right: 20, left: -10, bottom: 10 }}
-                  >
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="label" type="category" width={80} tick={{ fontSize: 10 }} />
-                    <Tooltip
-                      cursor={{ fill: "#f0f0f0" }}
-                      wrapperStyle={{ fontSize: "10px" }}
-                      formatter={(value) => [value, "Value"]}
-                    />
-                    <Bar dataKey="value" radius={[0, 10, 10, 0]}>
-                      {potential_data.map((item, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill="#217fad"
-                          cursor="pointer"
-                          onClick={() => handleFilterChange("segment", item.segment)}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-sm text-gray-500 text-center pt-4">No data available</div>
-              )}
+          <div className="flex-grow">
+            <ResponsiveContainer width="100%" height="90%">
+              <BarChart data={potential_data} margin={{ top: 10, right: 30, left: -20, bottom: 40 }} barSize={40}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
+                <Bar
+                  dataKey="Zolgensma"
+                  stackId="a"
+                  fill={filters.selectedPotentialDrug === "ZOLGENSMA" ? "#6a3d81" : "#8E58B3"}
+                  onClick={(data) => handlePotentialBarClick(data, "Zolgensma")}
+                  cursor="pointer"
+                />
+                <Bar
+                  dataKey="Spinraza"
+                  stackId="a"
+                  fill={filters.selectedPotentialDrug === "SPINRAZA" ? "#1c6f7c" : "#2A9FB0"}
+                  onClick={(data) => handlePotentialBarClick(data, "Spinraza")}
+                  cursor="pointer"
+                />
+                <Bar
+                  dataKey="Evrysdi"
+                  stackId="a"
+                  fill={filters.selectedPotentialDrug === "EVRYSDI" ? "#9c003f" : "#D50057"}
+                  onClick={(data) => handlePotentialBarClick(data, "Evrysdi")}
+                  cursor="pointer"
+                >
+                  <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex gap-2 items-center justify-center p-2">
+              <div className="flex gap-1 items-center">
+                <div className="bg-[#8E58B3] rounded-full w-2 h-2"></div>
+                <span className="text-[10px] text-gray-600">Zolgensma</span>
+              </div>
+              <div className="flex gap-1 items-center">
+                <div className="bg-[#2A9FB0] rounded-full w-2 h-2"></div>
+                <span className="text-[10px] text-gray-600">Spinraza</span>
+              </div>
+              <div className="flex gap-1 items-center">
+                <div className="bg-[#D50057] rounded-full w-2 h-2"></div>
+                <span className="text-[10px] text-gray-600">Evrysdi</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1089,7 +1286,7 @@ const HCPlandscape = () => {
           </div>
 
           <ResponsiveContainer width="100%" height="100%" style={{ marginLeft: -10, marginBottom: -20 }}>
-            <BarChart data={hcpsplit_age}>
+            <BarChart data={hcpsplit_age} barSize={50}>
               <CartesianGrid strokeDasharray="3 3" />
 
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
@@ -1105,8 +1302,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="<2"
                 stackId="a"
-                fill="#2c84b0"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedAgeGroup === "<2" ? "#1a5a7c" : "#2c84b0"}
+                onClick={(data) => handleAgeGroupBarClick(data, "<2")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1121,8 +1318,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="3-17"
                 stackId="a"
-                fill="#8295ae"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedAgeGroup === "3-17" ? "#5a6a7c" : "#8295ae"}
+                onClick={(data) => handleAgeGroupBarClick(data, "3-17")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1137,16 +1334,16 @@ const HCPlandscape = () => {
               <Bar
                 dataKey=">18"
                 stackId="a"
-                fill="#addaf0"
+                fill={filters.selectedAgeGroup === ">18" ? "#7a9ab0" : "#addaf0"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleSegmentBarClick(data)}
+                onClick={(data) => handleAgeGroupBarClick(data, ">18")}
                 cursor="pointer"
               >
                 <LabelList
                   dataKey=">18"
                   position="insideTop"
                   fontSize={9}
-                  fill="#333"
+                  fill={filters.selectedAgeGroup === ">18" ? "#fff" : "#333"}
                   formatter={(val) => `${Math.round(val)}%`}
                 />
               </Bar>
@@ -1176,7 +1373,7 @@ const HCPlandscape = () => {
           </div>
 
           <ResponsiveContainer width="100%" height="80%" style={{ marginRight: -10, marginBottom: -20 }}>
-            <BarChart data={hcpsplit_specialty_data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+            <BarChart data={hcpsplit_specialty_data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }} barSize={60}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
@@ -1189,8 +1386,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="Child Neurology"
                 stackId="a"
-                fill="#5d708a"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "Child Neurology" ? "#3a4a5a" : "#5d708a"}
+                onClick={(data) => handleSpecialtyBarClick(data, "Child Neurology")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1204,8 +1401,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="Neurology"
                 stackId="a"
-                fill="#7cb1cc"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "Neurology" ? "#5a8a9c" : "#7cb1cc"}
+                onClick={(data) => handleSpecialtyBarClick(data, "Neurology")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1219,8 +1416,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="Neuromuscular"
                 stackId="a"
-                fill="#c39ac9"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "Neuromuscular" ? "#9a6a9a" : "#c39ac9"}
+                onClick={(data) => handleSpecialtyBarClick(data, "Neuromuscular")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1234,8 +1431,8 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="Pediatric"
                 stackId="a"
-                fill="#1f5f86"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "Pediatric" ? "#0a3a5a" : "#1f5f86"}
+                onClick={(data) => handleSpecialtyBarClick(data, "Pediatric")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1249,23 +1446,23 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="Radiology"
                 stackId="a"
-                fill="#a686c1"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "Radiology" ? "#7a5a9a" : "#a686c1"}
+                onClick={(data) => handleSpecialtyBarClick(data, "Radiology")}
                 cursor="pointer"
-            >
-              <LabelList
+              >
+                <LabelList
                   dataKey="Radiology"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
                   formatter={(val) => `${Math.round(val)}%`}
                 />
-            </Bar>
+              </Bar>
               <Bar
                 dataKey="NP/PA"
                 stackId="a"
-                fill="#8ea2e0"
-                onClick={(data) => handleSegmentBarClick(data)}
+                fill={filters.selectedSpecialty === "NP/PA" ? "#6a7ac0" : "#8ea2e0"}
+                onClick={(data) => handleSpecialtyBarClick(data, "NP/PA")}
                 cursor="pointer"
               >
                 <LabelList
@@ -1279,9 +1476,9 @@ const HCPlandscape = () => {
               <Bar
                 dataKey="All Others"
                 stackId="a"
-                fill="#dfb793"
+                fill={filters.selectedSpecialty === "All Others" ? "#bf9a73" : "#dfb793"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleSegmentBarClick(data)}
+                onClick={(data) => handleSpecialtyBarClick(data, "All Others")}
                 cursor="pointer"
               >
                 <LabelList
