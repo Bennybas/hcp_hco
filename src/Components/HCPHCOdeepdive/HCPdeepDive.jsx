@@ -1,9 +1,9 @@
 "use client"
 
 import { ArrowLeft } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Cell } from "recharts"
 import { useLocation } from "react-router-dom"
 import * as d3 from "d3"
 import api from "../api/api"
@@ -26,10 +26,50 @@ const HCPdeepDive = () => {
   // Add a new state for tracking referral loading
   const [referralLoading, setReferralLoading] = useState(true)
 
+  // Year filter state
+  const [availableYears, setAvailableYears] = useState([])
+  const [selectedYears, setSelectedYears] = useState([])
+
+  // Filters for interactive charts
+  const [selectedDrug, setSelectedDrug] = useState(null)
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState(null)
+  const [selectedScientificActivity, setSelectedScientificActivity] = useState(null)
+
   // Ref for the network graph container
   const networkRef = useRef(null)
   // Ref to track if the graph has been rendered
   const graphRenderedRef = useRef(false)
+
+  // Filtered data based on year selection
+  const filteredHcpData = useMemo(() => {
+    if (selectedYears.length === 0) return hcpData
+    return hcpData.filter((item) => selectedYears.includes(item.year))
+  }, [hcpData, selectedYears])
+
+  // Further filtered data based on interactive selections
+  const interactiveFilteredData = useMemo(() => {
+    let filtered = [...filteredHcpData]
+
+    if (selectedDrug) {
+      filtered = filtered.filter((item) => {
+        if (selectedDrug === "Zolgensma") return item.drug_name === "ZOLGENSMA"
+        if (selectedDrug === "Spinraza") return item.drug_name === "SPINRAZA"
+        if (selectedDrug === "Evrysdi") return item.drug_name === "EVRYSDI"
+        return true
+      })
+    }
+
+    if (selectedAgeGroup) {
+      filtered = filtered.filter((item) => {
+        if (selectedAgeGroup === "<2") return item.age_group === "0 to 2"
+        if (selectedAgeGroup === "2-18") return item.age_group === "3 to 17"
+        if (selectedAgeGroup === ">18") return item.age_group === "Above 18"
+        return true
+      })
+    }
+
+    return filtered
+  }, [filteredHcpData, selectedDrug, selectedAgeGroup])
 
   useEffect(() => {
     const fetchHCPData = async () => {
@@ -40,6 +80,14 @@ const HCPdeepDive = () => {
         const data = await response.json()
 
         setHcpData(data)
+
+        // Extract available years from data
+        const years = [...new Set(data.map((item) => item.year))]
+          .filter((year) => year && year !== "2016" && year !== "2025")
+          .sort((a, b) => b - a) // Sort in descending order
+
+        setAvailableYears(years)
+
         processHCPData(data)
       } catch (error) {
         console.error("Error fetching HCP data:", error)
@@ -50,6 +98,13 @@ const HCPdeepDive = () => {
 
     fetchHCPData()
   }, [hcpName])
+
+  // Update processed data when filters change
+  useEffect(() => {
+    if (interactiveFilteredData.length > 0) {
+      processHCPData(interactiveFilteredData)
+    }
+  }, [interactiveFilteredData])
 
   // Fetch referral data when NPI is available
   useEffect(() => {
@@ -137,6 +192,54 @@ const HCPdeepDive = () => {
     filterReferralData(tab)
     // Reset the graph rendered flag when changing tabs
     graphRenderedRef.current = false
+  }
+
+  // Handle year selection
+  const handleYearToggle = (year) => {
+    if (year === "All") {
+      setSelectedYears([])
+    } else {
+      setSelectedYears((prev) => {
+        if (prev.includes(year)) {
+          return prev.filter((y) => y !== year)
+        } else {
+          return [...prev, year]
+        }
+      })
+    }
+  }
+
+  // Handle chart item click
+  const handleDrugClick = (entry) => {
+    if (selectedDrug === entry.category) {
+      setSelectedDrug(null)
+    } else {
+      setSelectedDrug(entry.category)
+    }
+  }
+
+  const handleAgeClick = (entry) => {
+    if (selectedAgeGroup === entry.category) {
+      setSelectedAgeGroup(null)
+    } else {
+      setSelectedAgeGroup(entry.category)
+    }
+  }
+
+  const handleScientificClick = (entry) => {
+    if (selectedScientificActivity === entry.category) {
+      setSelectedScientificActivity(null)
+    } else {
+      setSelectedScientificActivity(entry.category)
+    }
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSelectedYears([])
+    setSelectedDrug(null)
+    setSelectedAgeGroup(null)
+    setSelectedScientificActivity(null)
   }
 
   // Effect to render the network graph when referral data changes
@@ -413,34 +516,6 @@ const HCPdeepDive = () => {
         .attr("font-size", "10px")
         .attr("fill", "#666")
         .text("Use mouse wheel to zoom, drag to pan")
-
-      // Add legend for HCP-HCO pairs
-      // const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right + 20}, 20)`)
-
-      // // Add legend title
-      // legendGroup
-      //   .append("text")
-      //   .attr("x", 0)
-      //   .attr("y", 0)
-      //   .attr("font-size", "12px")
-      //   .attr("font-weight", "bold")
-      //   .text("HCP-HCO Pairs")
-
-      // // Add legend items (limit to 10 to avoid overcrowding)
-      // const legendItems = Object.keys(accountGroups).slice(0, 10)
-
-      // legendItems.forEach((accountName, i) => {
-      //   const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 20 + 20})`)
-
-      //   g.append("circle").attr("r", 6).attr("fill", colorScale(accountName))
-
-      //   g.append("text")
-      //     .attr("x", 15)
-      //     .attr("y", 0)
-      //     .attr("dy", ".35em")
-      //     .attr("font-size", "10px")
-      //     .text(accountName.length > 25 ? accountName.substring(0, 25) + "..." : accountName)
-      // })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -647,11 +722,50 @@ const HCPdeepDive = () => {
 
   return (
     <div className="p-4 bg-gray-100">
-      {/* Back Button */}
-      <button onClick={() => navigate("/")} className="flex gap-2 py-2 px-1 items-center">
-        <ArrowLeft className="w-4 h-4 text-gray-600" />
-        <span className="text-gray-700 text-[12px]">Back</span>
-      </button>
+      {/* Back Button and Year Filter */}
+      <div className="flex w-full justify-between mb-4">
+        <button onClick={() => navigate("/")} className="flex gap-2 py-2 px-1 items-center justify-start">
+          <ArrowLeft className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-700 text-[12px]">Back</span>
+        </button>
+
+        {/* Year filter as pill buttons */}
+        <div className="flex items-center gap-2 bg-white rounded-full shadow-sm p-1">
+          {/* <div className="flex items-center mr-2">
+            <span className="text-gray-600 text-[12px]">Year:</span>
+          </div> */}
+
+          <button
+            className={`px-4 py-1 rounded-full text-[12px] transition-colors ${
+              selectedYears.length === 0 ? "bg-[#0460A9] text-white" : "bg-gray-200 text-gray-700"
+            }`}
+            onClick={() => handleYearToggle("All")}
+          >
+            All
+          </button>
+
+          {availableYears.map((year) => (
+            <button
+              key={year}
+              className={`px-4 py-1 rounded-full text-[12px] transition-colors ${
+                selectedYears.includes(year) ? "bg-[#0460A9] text-white" : "bg-gray-200 text-gray-700"
+              }`}
+              onClick={() => handleYearToggle(year)}
+            >
+              {year}
+            </button>
+          ))}
+
+          {(selectedYears.length > 0 || selectedDrug || selectedAgeGroup || selectedScientificActivity) && (
+            <button
+              onClick={clearAllFilters}
+              className="ml-2 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full hover:bg-blue-100"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Main Layout */}
       <div className="w-full flex gap-4">
@@ -690,7 +804,7 @@ const HCPdeepDive = () => {
 
             {/* Other Details */}
             <div className="w-full">
-              <div className="text-[10px] text-gray-600">Zolgensma user</div>
+              <div className="text-[10px] text-gray-600">Zolgensma Prescriber</div>
               <div className="text-[12px] font-semibold text-gray-900">{hcpDetails.zolgensmaUser || "Yes"}</div>
               <hr className="border-gray-300 w-full my-2" />
             </div>
@@ -755,9 +869,27 @@ const HCPdeepDive = () => {
                     labelStyle={{ fontSize: 11 }}
                     itemStyle={{ fontSize: 10 }}
                   />
-                  <Bar dataKey="Zolgensma" stackId="a" fill="#8E58B3" cursor="pointer" />
-                  <Bar dataKey="Spinraza" stackId="a" fill="#2A9FB0" cursor="pointer" />
-                  <Bar dataKey="Evrysdi" stackId="a" fill="#D50057" cursor="pointer">
+                  <Bar
+                    dataKey="Zolgensma"
+                    stackId="a"
+                    fill={selectedDrug === "Zolgensma" ? "#6a3d81" : "#8E58B3"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Zolgensma" })}
+                  />
+                  <Bar
+                    dataKey="Spinraza"
+                    stackId="a"
+                    fill={selectedDrug === "Spinraza" ? "#1c6f7c" : "#2A9FB0"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Spinraza" })}
+                  />
+                  <Bar
+                    dataKey="Evrysdi"
+                    stackId="a"
+                    fill={selectedDrug === "Evrysdi" ? "#9c003f" : "#D50057"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Evrysdi" })}
+                  >
                     <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
                   </Bar>
                 </BarChart>
@@ -774,7 +906,20 @@ const HCPdeepDive = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="value" fill="#3680ba" barSize={40} radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="value"
+                        barSize={40}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        onClick={(data) => handleAgeClick(data)}
+                      >
+                        {ageData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={selectedAgeGroup === entry.category ? "#1e5a8d" : "#3680ba"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -789,7 +934,17 @@ const HCPdeepDive = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="value" fill="#3680ba" barSize={40} radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="value"
+                        barSize={40}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        onClick={(data) => handleDrugClick(data)}
+                      >
+                        {drugData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={selectedDrug === entry.category ? "#1e5a8d" : "#3680ba"} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -803,7 +958,20 @@ const HCPdeepDive = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="value" fill="#3680ba" barSize={40} radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="value"
+                        barSize={40}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        onClick={(data) => handleScientificClick(data)}
+                      >
+                        {scientificData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={selectedScientificActivity === entry.category ? "#1e5a8d" : "#3680ba"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

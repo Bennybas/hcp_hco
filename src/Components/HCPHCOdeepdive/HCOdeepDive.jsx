@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowLeft } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   PieChart,
@@ -20,6 +20,7 @@ import {
 import { useLocation } from "react-router-dom"
 import * as d3 from "d3"
 import api from "../api/api"
+
 
 const HCOdeepDive = () => {
   const navigate = useNavigate()
@@ -45,10 +46,54 @@ const HCOdeepDive = () => {
   const [tableLoading, setTableLoading] = useState(true)
   const [referralLoading, setReferralLoading] = useState(true)
 
+  // Year filter state
+  const [availableYears, setAvailableYears] = useState([])
+  const [selectedYears, setSelectedYears] = useState([])
+
+  // Filters for interactive charts
+  const [selectedDrug, setSelectedDrug] = useState(null)
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState(null)
+  const [selectedSpecialty, setSelectedSpecialty] = useState(null)
+  const [selectedHcp, setSelectedHcp] = useState(null)
+
   // Ref for the network graph container
   const networkRef = useRef(null)
   // Ref to track if the graph has been rendered
   const graphRenderedRef = useRef(false)
+
+  // Filtered data based on year selection
+  const filteredHcoData = useMemo(() => {
+    if (selectedYears.length === 0) return hcoData
+    return hcoData.filter((item) => selectedYears.includes(item.year))
+  }, [hcoData, selectedYears])
+
+  // Further filtered data based on interactive selections
+  const interactiveFilteredData = useMemo(() => {
+    let filtered = [...filteredHcoData]
+
+    if (selectedDrug) {
+      filtered = filtered.filter((item) => item.drug_name === selectedDrug)
+    }
+
+    if (selectedAgeGroup) {
+      filtered = filtered.filter((item) => {
+        if (selectedAgeGroup === "<2") return item.age_group === "0 to 2"
+        if (selectedAgeGroup === "2-18") return item.age_group === "3 to 17"
+        if (selectedAgeGroup === ">18") return item.age_group === "Above 18"
+        return true
+      })
+    }
+
+    if (selectedSpecialty) {
+      filtered = filtered.filter((item) => item.final_spec === selectedSpecialty)
+    }
+
+    if (selectedHcp) {
+      filtered = filtered.filter((item) => item.hcp_name === selectedHcp)
+    }
+
+    return filtered
+  }, [filteredHcoData, selectedDrug, selectedAgeGroup, selectedSpecialty, selectedHcp])
 
   useEffect(() => {
     const fetchHCOData = async () => {
@@ -62,6 +107,14 @@ const HCOdeepDive = () => {
         const data = await response.json()
 
         setHcoData(data)
+
+        // Extract available years from data
+        const years = [...new Set(data.map((item) => item.year))]
+          .filter((year) => year && year !== "2016" && year !== "2025")
+          .sort((a, b) => b - a) // Sort in descending order
+
+        setAvailableYears(years)
+
         processHCOData(data)
 
         // Fetch referral data separately
@@ -79,6 +132,13 @@ const HCOdeepDive = () => {
 
     fetchHCOData()
   }, [hcoMdm])
+
+  // Update processed data when filters change
+  useEffect(() => {
+    if (interactiveFilteredData.length > 0) {
+      processHCOData(interactiveFilteredData)
+    }
+  }, [interactiveFilteredData])
 
   const processHCOData = (data) => {
     if (data && data.length > 0) {
@@ -130,32 +190,6 @@ const HCOdeepDive = () => {
           }
         }
       })
-
-      // If no data is available, create sample data
-      if (Object.keys(yearQuarterData).length === 0) {
-        // Create sample data for the last 8 quarters, excluding 2016 and 2025
-        const years = ["2022", "2023", "2024"]
-        const quarters = ["1", "2", "3", "4"]
-
-        years.forEach((year) => {
-          quarters.forEach((quarter) => {
-            const key = `${year}-Q${quarter}`
-            yearQuarterData[key] = {
-              yearQuarter: key,
-              year: year,
-              quarter: `Q${quarter}`,
-              Zolgensma: Math.floor(Math.random() * 5),
-              Spinraza: Math.floor(Math.random() * 8),
-              Evrysdi: Math.floor(Math.random() * 6),
-              total: 0,
-            }
-
-            // Calculate total
-            yearQuarterData[key].total =
-              yearQuarterData[key].Zolgensma + yearQuarterData[key].Spinraza + yearQuarterData[key].Evrysdi
-          })
-        })
-      }
 
       // Convert to array and sort by year and quarter
       const formattedData = Object.values(yearQuarterData).sort((a, b) => {
@@ -324,58 +358,67 @@ const HCOdeepDive = () => {
     }
   }
 
-  // Process Referral data
-  const processReferralData = (data) => {
-    if (!data || data.length === 0) {
-      setAllReferralData([])
-      filterReferralData("all", [])
-      setReferralLoading(false)
-      return
+ // The processReferralData function needs to be updated to use the hco_mdm_name field correctly
+const processReferralData = (data) => {
+  if (!data || data.length === 0) {
+    setAllReferralData([])
+    filterReferralData("all", [])
+    setReferralLoading(false)
+    return
+  }
+
+  // Group by referring organization to get unique referring HCOs
+  const referralMap = new Map()
+
+  data.forEach((record) => {
+    // Get the referring organization name from hco_mdm_name as requested
+    const refOrgName = record.hco_mdm_name || "Unknown Organization"
+
+    // Skip if the referring organization is missing or "-"
+    if (refOrgName === "-") return
+
+    // Get the within/outside status directly from the API field
+    const withinOutsideStatus = record.within_outside_hco_referral || "UNSPECIFIED"
+
+    // Determine if this is within or outside based on the field value
+    const isWithinInstitute = withinOutsideStatus === "WITHIN"
+
+    // Skip UNSPECIFIED if filtering by within/outside
+    if (withinOutsideStatus === "UNSPECIFIED" && activeTab !== "all") return
+
+    const key = refOrgName
+
+    if (!referralMap.has(key)) {
+      referralMap.set(key, {
+        accountName: refOrgName,
+        patients: new Set(),
+        isWithinInstitute: isWithinInstitute,
+        withinOutsideStatus: withinOutsideStatus,
+      })
     }
 
-    // Group by HCO MDM name to get unique referring HCOs
-    const referralMap = new Map()
+    // Add patient ID to the set if it exists
+    if (record.patient_id) {
+      referralMap.get(key).patients.add(record.patient_id)
+    }
+  })
 
-    data.forEach((record) => {
-      // Use hco_mdm_name as the key for referring HCO
-      const refHcoName =
-        record.hco_mdm_name && record.hco_mdm_name !== "-"
-          ? record.hco_mdm_name
-          : record.ref_name && record.ref_name !== "-"
-            ? record.ref_name
-            : "Unknown HCO"
+  // Convert to array with patient counts
+  const referralArray = Array.from(referralMap.values()).map((item) => ({
+    accountName: item.accountName,
+    patientCount: item.patients.size,
+    isWithinInstitute: item.isWithinInstitute,
+    withinOutsideStatus: item.withinOutsideStatus,
+  }))
 
-      if (!refHcoName || refHcoName === "-") return
+  // Sort by patient count
+  referralArray.sort((a, b) => b.patientCount - a.patientCount)
 
-      const key = refHcoName
+  setAllReferralData(referralArray)
+  filterReferralData(activeTab, referralArray)
+  setReferralLoading(false)
+}
 
-      if (!referralMap.has(key)) {
-        referralMap.set(key, {
-          accountName: refHcoName,
-          patients: new Set(),
-          isWithinInstitute: false, // Default to false, will be updated if needed
-        })
-      }
-
-      if (record.patient_id) {
-        referralMap.get(key).patients.add(record.patient_id)
-      }
-    })
-
-    // Convert to array with patient counts
-    const referralArray = Array.from(referralMap.values()).map((item) => ({
-      accountName: item.accountName,
-      patientCount: item.patients.size,
-      isWithinInstitute: item.isWithinInstitute,
-    }))
-
-    // Sort by patient count
-    referralArray.sort((a, b) => b.patientCount - a.patientCount)
-
-    setAllReferralData(referralArray)
-    filterReferralData("all", referralArray)
-    setReferralLoading(false)
-  }
 
   // Filter referral data based on active tab
   const filterReferralData = (tab, data = allReferralData) => {
@@ -384,7 +427,7 @@ const HCOdeepDive = () => {
     } else if (tab === "within") {
       setReferralData(data.filter((item) => item.isWithinInstitute))
     } else if (tab === "outside") {
-      setReferralData(data.filter((item) => !item.isWithinInstitute))
+      setReferralData(data.filter((item) => !item.isWithinInstitute && item.withinOutsideStatus !== "UNSPECIFIED"))
     }
   }
 
@@ -407,6 +450,69 @@ const HCOdeepDive = () => {
   const handleRowsPerPageChange = (newRowsPerPage) => {
     setRowsPerPage(newRowsPerPage)
     setCurrentPage(1) // Reset to first page when changing rows per page
+  }
+
+  // Handle year selection
+  const handleYearToggle = (year) => {
+    if (year === "All") {
+      setSelectedYears([])
+    } else {
+      setSelectedYears((prev) => {
+        if (prev.includes(year)) {
+          return prev.filter((y) => y !== year)
+        } else {
+          return [...prev, year]
+        }
+      })
+    }
+  }
+
+  // Handle chart item click
+  const handleDrugClick = (entry) => {
+    const drugMap = {
+      Zolgensma: "ZOLGENSMA",
+      Spinraza: "SPINRAZA",
+      Evrysdi: "EVRYSDI",
+    }
+
+    if (selectedDrug === drugMap[entry.category]) {
+      setSelectedDrug(null)
+    } else {
+      setSelectedDrug(drugMap[entry.category])
+    }
+  }
+
+  const handleAgeClick = (entry) => {
+    if (selectedAgeGroup === entry.category) {
+      setSelectedAgeGroup(null)
+    } else {
+      setSelectedAgeGroup(entry.category)
+    }
+  }
+
+  const handleSpecialtyClick = (entry) => {
+    if (selectedSpecialty === entry.name) {
+      setSelectedSpecialty(null)
+    } else {
+      setSelectedSpecialty(entry.name)
+    }
+  }
+
+  const handleHcpClick = (hcpName) => {
+    if (selectedHcp === hcpName) {
+      setSelectedHcp(null)
+    } else {
+      setSelectedHcp(hcpName)
+    }
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSelectedYears([])
+    setSelectedDrug(null)
+    setSelectedAgeGroup(null)
+    setSelectedSpecialty(null)
+    setSelectedHcp(null)
   }
 
   // Calculate pagination for table
@@ -501,6 +607,8 @@ const HCOdeepDive = () => {
           level: 1,
           patients: referral.patientCount,
           color: colorScale(referral.accountName),
+          isWithin: referral.isWithinInstitute,
+          withinOutsideStatus: referral.withinOutsideStatus,
           x: innerWidth * 0.7, // Position at 70% of the width
           y: 0, // Will be calculated later
         }
@@ -511,6 +619,8 @@ const HCOdeepDive = () => {
           source: rootNode.id,
           target: referredNode.id,
           value: referral.patientCount,
+          isWithin: referral.isWithinInstitute,
+          withinOutsideStatus: referral.withinOutsideStatus,
         })
       })
 
@@ -560,6 +670,12 @@ const HCOdeepDive = () => {
         })
         .attr("stroke-width", (d) => Math.sqrt(d.value) + 1)
         .attr("opacity", 0.7)
+        .attr("stroke-dasharray", (d) => {
+          // Use dashed lines for outside, solid for within
+          if (d.withinOutsideStatus === "WITHIN") return "none"
+          if (d.withinOutsideStatus === "OUTSIDE") return "5,5"
+          return "3,3" // Default for UNSPECIFIED
+        })
 
       // Draw nodes
       const nodeGroups = mainGroup
@@ -599,7 +715,7 @@ const HCOdeepDive = () => {
         .attr("dy", ".35em")
         .text((d) => d.name)
 
-      // Add patient count for referred HCO nodes
+      // Add patient count and within/outside indicator for referred HCO nodes
       nodeGroups
         .filter((d) => d.type === "referred")
         .append("text")
@@ -608,7 +724,14 @@ const HCOdeepDive = () => {
         .attr("text-anchor", "start")
         .attr("font-size", "9px")
         .attr("fill", "#555")
-        .text((d) => `Patients: ${d.patients}`)
+        .text((d) => {
+          let status = ""
+          if (d.withinOutsideStatus === "WITHIN") status = "Within"
+          else if (d.withinOutsideStatus === "OUTSIDE") status = "Outside"
+          else status = "Unspecified"
+
+          return `Patients: ${d.patients} (${status})`
+        })
 
       // Add zoom instructions
       svg
@@ -621,32 +744,32 @@ const HCOdeepDive = () => {
         .text("Use mouse wheel to zoom, drag to pan")
 
       // Create dynamic legend for referred HCOs
-      const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right - 120}, 20)`)
+      // const legendGroup = svg.append("g").attr("transform", `translate(${width - margin.right - 120}, 20)`)
 
-      // Add legend title
-      legendGroup
-        .append("text")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("font-size", "10px")
-        .attr("font-weight", "bold")
-        .text("Referred HCOs")
+      // // Add legend title
+      // legendGroup
+      //   .append("text")
+      //   .attr("x", 0)
+      //   .attr("y", 0)
+      //   .attr("font-size", "10px")
+      //   .attr("font-weight", "bold")
+      //   .text("Referred HCOs")
 
-      // Add legend items (limit to 10 to avoid overcrowding)
-      const legendItems = referralData.slice(0, 10)
+      // // Add legend items (limit to 10 to avoid overcrowding)
+      // const legendItems = referralData.slice(0, 10)
 
-      legendItems.forEach((item, i) => {
-        const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 15 + 15})`)
+      // legendItems.forEach((item, i) => {
+      //   const g = legendGroup.append("g").attr("transform", `translate(0, ${i * 15 + 15})`)
 
-        g.append("circle").attr("r", 5).attr("fill", colorScale(item.accountName))
+      //   g.append("circle").attr("r", 5).attr("fill", colorScale(item.accountName))
 
-        g.append("text")
-          .attr("x", 10)
-          .attr("y", 0)
-          .attr("dy", ".35em")
-          .attr("font-size", "8px")
-          .text(item.accountName.length > 20 ? item.accountName.substring(0, 20) + "..." : item.accountName)
-      })
+      //   g.append("text")
+      //     .attr("x", 10)
+      //     .attr("y", 0)
+      //     .attr("dy", ".35em")
+      //     .attr("font-size", "8px")
+      //     .text(item.accountName.length > 20 ? item.accountName.substring(0, 20) + "..." : item.accountName)
+      // })
     } catch (error) {
       console.error("Error rendering network graph:", error)
     }
@@ -660,13 +783,56 @@ const HCOdeepDive = () => {
     )
   }
 
+  const getHCPDetails = (hcpName) => {
+    navigate("/hcp", { state: { hcp_name: hcpName } })
+  }
+
   return (
     <div className="p-4 bg-gray-100">
-      {/* Back Button */}
-      <button onClick={() => navigate("/")} className="flex gap-2 py-2 px-1 items-center">
-        <ArrowLeft className="w-4 h-4 text-gray-600" />
-        <span className="text-gray-700 text-[12px]">Back</span>
-      </button>
+      {/* Back Button and Year Filter */}
+      <div className="flex w-full justify-between mb-4">
+        <button onClick={() => navigate("/")} className="flex gap-2 py-2 px-1 items-center justify-start">
+          <ArrowLeft className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-700 text-[12px]">Back</span>
+        </button>
+
+        {/* Year filter as pill buttons */}
+        <div className="flex items-center gap-2 bg-white rounded-full shadow-sm p-1">
+          {/* <div className="flex items-center mr-2">
+            <span className="text-gray-600 text-[12px]">Year:</span>
+          </div> */}
+
+          <button
+            className={`px-4 py-1 rounded-full text-[12px] transition-colors ${
+              selectedYears.length === 0 ? "bg-[#0460A9] text-white" : "bg-gray-200 text-gray-700"
+            }`}
+            onClick={() => handleYearToggle("All")}
+          >
+            All
+          </button>
+
+          {availableYears.map((year) => (
+            <button
+              key={year}
+              className={`px-4 py-1 rounded-full text-[12px] transition-colors ${
+                selectedYears.includes(year) ? "bg-[#0460A9] text-white" : "bg-gray-200 text-gray-700"
+              }`}
+              onClick={() => handleYearToggle(year)}
+            >
+              {year}
+            </button>
+          ))}
+
+          {(selectedYears.length > 0 || selectedDrug || selectedAgeGroup || selectedSpecialty || selectedHcp) && (
+            <button
+              onClick={clearAllFilters}
+              className="ml-2 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded-full hover:bg-blue-100"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Main Layout */}
       <div className="w-full flex gap-4">
@@ -703,12 +869,12 @@ const HCOdeepDive = () => {
 
             {/* Scientific Activities */}
             <div className="w-full">
-              <div className="text-[10px] text-gray-600">Tier/Cluster</div>
+              <div className="text-[10px] text-gray-600">HCO Treated Volume Potential</div>
               <div className="text-[12px] font-semibold text-gray-900">{hcoData[0]?.hco_mdm_tier || "0"}</div>
               <hr className="border-gray-300 w-full my-2" />
             </div>
             <div className="w-full">
-              <div className="text-[10px] text-gray-600">Zolgensma Ever</div>
+              <div className="text-[10px] text-gray-600">Zolgensma Prescriber</div>
               <div className="text-[12px] font-semibold text-gray-900">{hcoData[0]?.zolg_prescriber || "0"}</div>
               <hr className="border-gray-300 w-full my-2" />
             </div>
@@ -738,7 +904,7 @@ const HCOdeepDive = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="bg-[#D50057] rounded-full w-2 h-2"></div>
-                    
+
                     <span className="text-gray-700 text-[9px]">Evrysdi</span>
                   </div>
                 </div>
@@ -764,9 +930,27 @@ const HCOdeepDive = () => {
                     labelStyle={{ fontSize: 11 }}
                     itemStyle={{ fontSize: 10 }}
                   />
-                  <Bar dataKey="Zolgensma" stackId="a" fill="#8E58B3" cursor="pointer" />
-                  <Bar dataKey="Spinraza" stackId="a" fill="#2A9FB0" cursor="pointer" />
-                  <Bar dataKey="Evrysdi" stackId="a" fill="#D50057" cursor="pointer">
+                  <Bar
+                    dataKey="Zolgensma"
+                    stackId="a"
+                    fill={selectedDrug === "ZOLGENSMA" ? "#6a3d81" : "#8E58B3"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Zolgensma" })}
+                  />
+                  <Bar
+                    dataKey="Spinraza"
+                    stackId="a"
+                    fill={selectedDrug === "SPINRAZA" ? "#1c6f7c" : "#2A9FB0"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Spinraza" })}
+                  />
+                  <Bar
+                    dataKey="Evrysdi"
+                    stackId="a"
+                    fill={selectedDrug === "EVRYSDI" ? "#9c003f" : "#D50057"}
+                    cursor="pointer"
+                    onClick={(data) => handleDrugClick({ category: "Evrysdi" })}
+                  >
                     <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
                   </Bar>
                 </BarChart>
@@ -783,7 +967,21 @@ const HCOdeepDive = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="value" fill="#3680ba" barSize={40} radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="value"
+                        fill={(entry) => (selectedAgeGroup === entry.category ? "#1e5a8d" : "#3680ba")}
+                        barSize={40}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        onClick={(data) => handleAgeClick(data)}
+                      >
+                        {ageData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={selectedAgeGroup === entry.category ? "#1e5a8d" : "#3680ba"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -798,7 +996,20 @@ const HCOdeepDive = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
-                      <Bar dataKey="value" fill="#3680ba" barSize={40} radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="value"
+                        barSize={40}
+                        radius={[6, 6, 0, 0]}
+                        cursor="pointer"
+                        onClick={(data) => handleDrugClick(data)}
+                      >
+                        {drugData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={selectedDrug === entry.category.toUpperCase() ? "#1e5a8d" : "#3680ba"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -818,9 +1029,16 @@ const HCOdeepDive = () => {
                         fill="#8884d8"
                         paddingAngle={5}
                         dataKey="value"
+                        onClick={(data) => handleSpecialtyClick(data)}
+                        cursor="pointer"
                       >
                         {specialtyData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={selectedSpecialty === entry.name ? entry.color.replace("#", "#66") : entry.color}
+                            stroke={selectedSpecialty === entry.name ? "#000" : "none"}
+                            strokeWidth={selectedSpecialty === entry.name ? 2 : 0}
+                          />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ fontSize: 10 }} itemStyle={{ fontSize: 10 }} />
@@ -834,6 +1052,7 @@ const HCOdeepDive = () => {
                             {specialtyData[index]?.name}
                           </span>
                         )}
+                        onClick={(data) => handleSpecialtyClick(data)}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -884,8 +1103,13 @@ const HCOdeepDive = () => {
                         <tbody className="bg-white">
                           {paginatedHcpsData.length > 0 ? (
                             paginatedHcpsData.map((hcp, index) => (
-                              <tr key={index} className="border-t border-gray-200">
-                                <td className="px-4 py-3 text-[10px]">{hcp.hcpName}</td>
+                              <tr
+                                key={index}
+                                className={`border-t border-gray-200 ${selectedHcp === hcp.hcpName ? "bg-blue-50" : ""} hover:bg-gray-50`}
+                                // onClick={() => handleHcpClick(hcp.hcpName)}
+                                onClick={() => getHCPDetails(hcp.hcpName)}
+                              >
+                                <td className="px-4 py-3 text-[10px] cursor-pointer">{hcp.hcpName}</td>
                                 <td className="px-4 py-3 text-[10px]">{hcp.hcpPotential}</td>
                                 <td className="px-4 py-3 text-[10px]">{hcp.specialty}</td>
                                 <td className="px-4 py-3 text-[10px]">{hcp.patientCount}</td>
@@ -997,6 +1221,14 @@ const HCOdeepDive = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-700 text-[11px]">Referred HCOs (colored by organization)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-0.5 bg-gray-400 border-0 border-dashed"></div>
+                  <span className="text-gray-700 text-[11px]">Outside Organization</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-0.5 bg-gray-400"></div>
+                  <span className="text-gray-700 text-[11px]">Within Organization</span>
                 </div>
               </div>
 

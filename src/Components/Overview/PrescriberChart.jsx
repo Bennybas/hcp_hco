@@ -7,10 +7,10 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
   const formatSegmentName = (segment) => {
     if (!segment) return ""
     segment = segment.toUpperCase()
-    if (["VERY LOW", "V. LOW", "V.LOW", "VLOW"].includes(segment)) return "V. LOW"
-    if (segment === "LOW") return "LOW"
-    if (["MODERATE", "MED", "MEDIUM"].includes(segment)) return "MEDIUM"
-    if (segment === "HIGH") return "HIGH"
+    // if (["VERY LOW", "V. LOW", "V.LOW", "VLOW"].includes(segment)) return "V. LOW"
+    // if (segment === "LOW") return "LOW"
+    // if (["MODERATE", "MED", "MEDIUM"].includes(segment)) return "MEDIUM"
+    // if (segment === "HIGH") return "HIGH"
     return segment
   }
 
@@ -36,7 +36,7 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
       isSelected: selectedSegment === name,
     }))
 
-    const orderMap = { HIGH: 0, MEDIUM: 1, LOW: 2, "V. LOW": 3 }
+    const orderMap = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3 }
     result.sort((a, b) => (orderMap[a.name] ?? 999) - (orderMap[b.name] ?? 999))
 
     return result
@@ -66,7 +66,8 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
         <span className="text-gray-500 text-xs font-medium">Prescriber Cluster by Treated Patient Volume</span>
 
         {selectedSegment && (
-          <span className="ml-2 text-[10px] text-blue-600">(Click on selected bar to clear filter)</span>
+          <span></span>
+          // <span className="ml-2 text-[10px] text-blue-600">(Click on selected bar to clear filter)</span>
         )}
       </div>
 
@@ -82,7 +83,7 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
                 wrapperStyle={{ fontSize: "10px" }}
                 formatter={(value) => [`${value} patients`, "Volume"]}
               />
-              <Bar dataKey="value" radius={[0, 10, 10, 0]} onClick={handleBarClick} cursor="pointer">
+              <Bar dataKey="value" radius={[0, 10, 10, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 10 }}>
                 {segmentData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}

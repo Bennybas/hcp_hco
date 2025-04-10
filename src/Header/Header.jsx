@@ -116,12 +116,12 @@ const Header = () => {
 
           {/* Right Side Section with User Info */}
           <div className="flex flex-row items-center gap-3">
-            <div className="flex bg-white rounded-full w-8 h-8 p-2 border border-gray-300 items-center">
+            {/* <div className="flex bg-white rounded-full w-8 h-8 p-2 border border-gray-300 items-center">
               <Search className="w-4 h-4 text-gray-500 text-center"/>
             </div>
             <div className="flex bg-white rounded-full w-8 h-8 p-2 border border-gray-300 items-center">
               <Bell className="w-4 h-4 text-gray-500 text-center"/>
-            </div>
+            </div> */}
             <button className="p-1 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors duration-200 bg-white flex px-2 items-center gap-2">
               <ChevronDown className="text-gray-500 w-4 h-4"/>
               

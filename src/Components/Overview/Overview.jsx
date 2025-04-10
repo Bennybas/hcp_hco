@@ -73,9 +73,9 @@ const Overview = () => {
         filtered = filtered.filter((item) => {
           const segment = item.hcp_segment ? item.hcp_segment.toUpperCase() : ""
           if (selectedHcpSegment === "HIGH") return segment === "HIGH"
-          if (selectedHcpSegment === "MODERATE") return ["MODERATE", "MEDIUM", "MED"].includes(segment)
+          if (selectedHcpSegment === "MEDIUM") return ["MODERATE", "MEDIUM", "MED"].includes(segment)
           if (selectedHcpSegment === "LOW") return segment === "LOW"
-          if (selectedHcpSegment === "V. LOW") return ["VERY LOW", "V. LOW", "V.LOW", "VLOW"].includes(segment)
+          if (selectedHcpSegment === "V-LOW") return ["VERY LOW", "V. LOW", "V.LOW", "V-LOW"].includes(segment)
           return false
         })
       }
@@ -201,7 +201,7 @@ const Overview = () => {
     const hcpPatientMap = new Map()
     const hcpIdToNameMap = new Map()
     const hcpIdToSpecialityMap = new Map()
-    const hcpKOLMap = new Map()
+    const hcpZOLMap = new Map()
 
     renderingHcps.forEach((item) => {
       if (item.hcp_id && item.hcp_id !== "-") {
@@ -213,10 +213,8 @@ const Overview = () => {
           if (item.final_spec && item.final_spec !== "-") {
             hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
           }
-
-          // Set KOL value (only once since it's unique per hcp_id)
-          if (item.kol && item.kol !== "-") {
-            hcpKOLMap.set(item.hcp_id, item.kol.toUpperCase()) // normalize to "yes" or "no"
+          if (item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
+            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase()) 
           }
         } else {
           // Fallback: Add specialty if missing
@@ -225,8 +223,8 @@ const Overview = () => {
           }
 
           // Optional: If KOL isn't already set and exists on this item
-          if (!hcpKOLMap.has(item.hcp_id) && item.kol && item.kol !== "-") {
-            hcpKOLMap.set(item.hcp_id, item.kol.toLowerCase())
+          if (!hcpZOLMap.has(item.hcp_id) && item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
+            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toLowerCase())
           }
         }
 
@@ -300,7 +298,7 @@ const Overview = () => {
         name: hcpIdToNameMap.get(hcpId) || `HCP ${hcpId}`,
         volume: patients.size,
         speciality: hcpIdToSpecialityMap.get(hcpId) || "Unknown",
-        kol: hcpKOLMap.get(hcpId),
+        kol: hcpZOLMap.get(hcpId),
       }
     })
 
@@ -668,7 +666,7 @@ const Overview = () => {
                   <th className="p-2 text-left">HCP NPI</th>
                   <th className="p-2 text-left">HCP Name</th>
                   <th className="p-2 text-left">HCP Speciality</th>
-                  <th className="p-2 text-left">KOL Flag</th>
+                  <th className="p-2 text-left">ZOLGENSMA IV TARGET</th>
                   <th className="p-2 text-right">Treated pat. Vol</th>
                 </tr>
               </thead>

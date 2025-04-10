@@ -73,24 +73,26 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
         <span className="text-gray-500 text-xs font-medium">HCO Group by Patient</span>
 
         {selectedGrouping && (
-          <span className="ml-2 text-[10px] text-blue-600">(Click on selected bar to clear filter)</span>
+          <span></span>
+          // <span className="ml-2 text-[10px] text-blue-600">(Click on selected bar to clear filter)</span>
         )}
       </div>
 
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 30, left: -25, bottom: 10 }}>
+        <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 30, left: -5, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
           <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} patients`, "Volume"]} />
-          <Bar dataKey="value" radius={[0, 8, 8, 0]} onClick={handleBarClick} cursor="pointer">
+          <Bar dataKey="value" radius={[0, 8, 8, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 10 }}>
             {segmentData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={entry.isSelected ? selectedColor : colors[0]}
-                stroke={entry.isSelected ? "#000" : "none"}
+                stroke={entry.isSelected ? "#fff" : "none"}
                 strokeWidth={entry.isSelected ? 1 : 0}
               />
             ))}
+            
           </Bar>
         </BarChart>
       </ResponsiveContainer>
