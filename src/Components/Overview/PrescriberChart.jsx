@@ -20,13 +20,13 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
     const segmentPatientMap = new Map()
 
     hcpData.forEach((record) => {
-      if (record.hcp_segment && record.patient_id) {
+      if (record.hcp_segment && record.hcp_id) {
         const rawSegment = record.hcp_segment.toUpperCase()
         const formattedSegment = formatSegmentName(rawSegment)
         if (!segmentPatientMap.has(formattedSegment)) {
           segmentPatientMap.set(formattedSegment, new Set())
         }
-        segmentPatientMap.get(formattedSegment).add(record.patient_id)
+        segmentPatientMap.get(formattedSegment).add(record.hcp_id)
       }
     })
 
@@ -83,12 +83,12 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
                 wrapperStyle={{ fontSize: "10px" }}
                 formatter={(value) => [`${value} patients`, "Volume"]}
               />
-              <Bar dataKey="value" radius={[0, 10, 10, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 10 }}>
+              <Bar dataKey="value" radius={[0, 10, 10, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 9,dx: 4 }}>
                 {segmentData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={entry.isSelected ? SELECTED_COLOR : COLORS[0]}
-                    stroke={entry.isSelected ? "#000" : "none"}
+                    stroke={entry.isSelected ? "#fff" : "none"}
                     strokeWidth={entry.isSelected ? 1 : 0}
                   />
                 ))}

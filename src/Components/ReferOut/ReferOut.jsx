@@ -101,7 +101,6 @@ const ReferOut = ({ referType = "HCP" }) => {
   const [filteredData, setFilteredData] = useState([])
   const [mapReady, setMapReady] = useState(false)
 
-  // State for filters - different filters based on referType
   const [filters, setFilters] = useState({
     // Common filters
     state: "All",

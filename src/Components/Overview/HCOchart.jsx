@@ -26,16 +26,16 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
 
     HCOdata.forEach((record) => {
       let group = record.hco_grouping
-      const patient = record.patient_id
+      const hco = record.hco_mdm
 
-      if (!group || group === "-" || !patient) return
+      if (!group || group === "-" || !hco) return
 
       group = formatGroupName(group)
 
       if (!groupMap.has(group)) {
         groupMap.set(group, new Set())
       }
-      groupMap.get(group).add(patient)
+      groupMap.get(group).add(hco)
     })
 
     const result = displayOrder.map((group) => {
@@ -82,8 +82,8 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
         <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 30, left: -5, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
-          <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} patients`, "Volume"]} />
-          <Bar dataKey="value" radius={[0, 8, 8, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 10 }}>
+          <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} HCOs`, "Volume"]} />
+          <Bar dataKey="value" radius={[0, 8, 8, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 9,dx: 4 }}>
             {segmentData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}

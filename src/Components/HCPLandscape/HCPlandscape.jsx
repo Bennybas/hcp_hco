@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList,Legend } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 
@@ -1238,6 +1238,7 @@ const HCPlandscape = () => {
                 <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
+                <Legend  iconType="circle" iconSize={8}  wrapperStyle={{ fontSize: '9px' }} verticalAlign="bottom" align="center" />
                 <Bar
                   dataKey="Zolgensma"
                   stackId="a"
@@ -1262,6 +1263,7 @@ const HCPlandscape = () => {
                   <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
                 </Bar>
               </BarChart>
+            
             </ResponsiveContainer>
             <div className="flex gap-2 items-center justify-center p-2">
               <div className="flex gap-1 items-center">

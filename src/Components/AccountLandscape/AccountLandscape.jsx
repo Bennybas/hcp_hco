@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, ChevronRight, ChevronLeft, X } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronLeft, X, Check } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
+import api from "../api/api"
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -42,12 +43,12 @@ const AccountLandscape = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
 
-  // State for filters
+  // State for filters - updated to use arrays for multiple selections
   const [filters, setFilters] = useState({
-    year: "All", // Default to All years
-    ageFilter: "All",
-    brand: "All",
-    state: "All",
+    years: [], // Changed to array for multi-select
+    ageFilters: [], // Changed to array for multi-select
+    brands: [], // Changed to array for multi-select
+    states: [], // Changed to array for multi-select
     kol: "All",
     zolgPrescriber: "All",
     zolgIVTarget: "All",
@@ -73,26 +74,23 @@ const AccountLandscape = () => {
   const handleStateSelect = (stateAbbr) => {
     // If a state is selected on the map, update the state filter
     if (stateAbbr) {
-      handleFilterChange("state", stateAbbr)
+      handleFilterChange("states", stateAbbr)
     } else {
       // If selection is cleared, reset to "All"
-      handleFilterChange("state", "All")
+      setFilters((prev) => ({ ...prev, states: [] }))
     }
   }
 
-  // Fetch data only once when component mounts
   useEffect(() => {
     const fetchData = async () => {
-      // Only fetch data if it hasn't been fetched before
       if (dataFetchedRef.current) return
 
       try {
         setLoading(true)
-        // Fetch data without year filter to get all records
-        const response = await fetch("https://hcp-hco-backend.onrender.com/fetch-hcolandscape")
+
+        const response = await fetch(`${api}/fetch-hcolandscape`)
         const jsonData = await response.json()
 
-        // Extract unique years from the data, excluding 2016 and 2025
         const years = [...new Set(jsonData.map((item) => item.year))]
           .filter((year) => year && year !== "-" && year !== "2016" && year !== "2025")
           .sort((a, b) => b - a) // Sort years in descending order
@@ -181,17 +179,17 @@ const AccountLandscape = () => {
 
   const getFilteredData = () => {
     return data.filter((item) => {
-      // Year filter
-      if (filters.year !== "All" && item.year !== filters.year) return false
+      // Year filter - check if any selected years match or if no years are selected
+      if (filters.years.length > 0 && !filters.years.includes(item.year)) return false
 
-      // Age filter
-      if (filters.ageFilter !== "All" && item.age_group !== filters.ageFilter) return false
+      // Age filter - check if any selected ages match or if no ages are selected
+      if (filters.ageFilters.length > 0 && !filters.ageFilters.includes(item.age_group)) return false
 
-      // Brand filter
-      if (filters.brand !== "All" && item.drug_name !== filters.brand) return false
+      // Brand filter - check if any selected brands match or if no brands are selected
+      if (filters.brands.length > 0 && !filters.brands.includes(item.drug_name)) return false
 
-      // State filter
-      if (filters.state !== "All" && item.hco_state !== filters.state) return false
+      // State filter - check if any selected states match or if no states are selected
+      if (filters.states.length > 0 && !filters.states.includes(item.hco_state)) return false
 
       // KOL filter
       if (filters.kol !== "All" && item.kol !== filters.kol) return false
@@ -834,19 +832,39 @@ const AccountLandscape = () => {
     setAccountTableData(result.slice(startIndex, endIndex))
   }
 
-  // Handle filter changes
+  // Handle filter changes for multi-select
   const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }))
-
-    // Reset to first page when filters change
-    setCurrentPage(1)
-
-    // Close dropdown after selection
-    setOpenDropdown(null)
-  }
+    setFilters((prev) => {
+      const newFilters = { ...prev };
+  
+      if (filterName === "years" || filterName === "ageFilters" || filterName === "brands" || filterName === "states") {
+        const currentValues = [...prev[filterName]];
+  
+        if (value === "All") {
+          return { ...prev, [filterName]: [] };
+        } else {
+          const valueIndex = currentValues.indexOf(value);
+          if (valueIndex === -1) {
+            currentValues.push(value);
+          } else {
+            currentValues.splice(valueIndex, 1);
+          }
+  
+          newFilters[filterName] = currentValues;
+        }
+      } else {
+        newFilters[filterName] = value;
+      }
+  
+      return newFilters;
+    });
+  
+    setCurrentPage(1);
+  
+    // REMOVE this line to prevent dropdown from closing
+    // setOpenDropdown(null);
+  };
+  
 
   // Toggle filter buttons
   const toggleFilter = (filterName, value) => {
@@ -995,10 +1013,10 @@ const AccountLandscape = () => {
   // Clear all filters
   const clearAllFilters = () => {
     setFilters({
-      year: "All",
-      ageFilter: "All",
-      brand: "All",
-      state: "All",
+      years: [],
+      ageFilters: [],
+      brands: [],
+      states: [],
       kol: "All",
       zolgPrescriber: "All",
       zolgIVTarget: "All",
@@ -1015,10 +1033,10 @@ const AccountLandscape = () => {
   // Check if any filters are active
   const hasActiveFilters = () => {
     return (
-      filters.year !== "All" ||
-      filters.ageFilter !== "All" ||
-      filters.brand !== "All" ||
-      filters.state !== "All" ||
+      filters.years.length > 0 ||
+      filters.ageFilters.length > 0 ||
+      filters.brands.length > 0 ||
+      filters.states.length > 0 ||
       filters.kol !== "All" ||
       filters.zolgPrescriber !== "All" ||
       filters.zolgIVTarget !== "All" ||
@@ -1030,6 +1048,14 @@ const AccountLandscape = () => {
       filters.selectedSpecialty !== null ||
       filters.selectedFacilityType !== null
     )
+  }
+
+  // Helper function to get display text for multi-select filters
+  const getFilterDisplayText = (filterName) => {
+    const values = filters[filterName]
+    if (values.length === 0) return "All"
+    if (values.length === 1) return values[0]
+    return `${values.length} selected`
   }
 
   if (loading) {
@@ -1044,13 +1070,14 @@ const AccountLandscape = () => {
     <div className="flex flex-col gap-4 w-full p-2">
       {/* Filters */}
       <div className="flex gap-4 items-center flex-wrap">
-        {/* Age Filter */}
+        {/* Age Filter - Updated to use checkboxes */}
         <div className="relative">
           <div
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+           
             onClick={() => toggleDropdown("age")}
           >
-            <span className="text-[12px] text-gray-600">Age: {filters.ageFilter}</span>
+            <span className="text-[12px] text-gray-600">Age: {getFilterDisplayText("ageFilters")}</span>
             <ChevronDown className="w-4 h-4" />
           </div>
           {openDropdown === "age" && (
@@ -1058,11 +1085,28 @@ const AccountLandscape = () => {
               {filterOptions.ages.map((age) => (
                 <div
                   key={age}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.ageFilter === age ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("ageFilter", age)}
+                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleFilterChange("ageFilters", age)
+                  }}
                 >
+                  <div
+                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                      age === "All"
+                        ? filters.ageFilters.length === 0
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                        : filters.ageFilters.includes(age)
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                    }`}
+                  >
+                    {(age === "All" && filters.ageFilters.length === 0) ||
+                    (age !== "All" && filters.ageFilters.includes(age)) ? (
+                      <Check className="w-3 h-3 text-white" />
+                    ) : null}
+                  </div>
                   {age}
                 </div>
               ))}
@@ -1070,13 +1114,13 @@ const AccountLandscape = () => {
           )}
         </div>
 
-        {/* Brand Filter */}
+        {/* Brand Filter - Updated to use checkboxes */}
         <div className="relative">
           <div
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
             onClick={() => toggleDropdown("brand")}
           >
-            <span className="text-[12px] text-gray-600">Brand: {filters.brand}</span>
+            <span className="text-[12px] text-gray-600">Brand: {getFilterDisplayText("brands")}</span>
             <ChevronDown className="w-4 h-4" />
           </div>
           {openDropdown === "brand" && (
@@ -1084,11 +1128,28 @@ const AccountLandscape = () => {
               {filterOptions.brands.map((brand) => (
                 <div
                   key={brand}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.brand === brand ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("brand", brand)}
+                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleFilterChange("brands", brand)
+                  }}
                 >
+                  <div
+                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                      brand === "All"
+                        ? filters.brands.length === 0
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                        : filters.brands.includes(brand)
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                    }`}
+                  >
+                    {(brand === "All" && filters.brands.length === 0) ||
+                    (brand !== "All" && filters.brands.includes(brand)) ? (
+                      <Check className="w-3 h-3 text-white" />
+                    ) : null}
+                  </div>
                   {brand}
                 </div>
               ))}
@@ -1096,13 +1157,13 @@ const AccountLandscape = () => {
           )}
         </div>
 
-        {/* State Filter */}
+        {/* State Filter - Updated to use checkboxes */}
         <div className="relative">
           <div
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
             onClick={() => toggleDropdown("state")}
           >
-            <span className="text-[12px] text-gray-600">State: {filters.state}</span>
+            <span className="text-[12px] text-gray-600">State: {getFilterDisplayText("states")}</span>
             <ChevronDown className="w-4 h-4" />
           </div>
           {openDropdown === "state" && (
@@ -1110,11 +1171,28 @@ const AccountLandscape = () => {
               {filterOptions.states.map((state) => (
                 <div
                   key={state}
-                  className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                    filters.state === state ? "bg-blue-50 text-blue-600" : ""
-                  }`}
-                  onClick={() => handleFilterChange("state", state)}
+                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleFilterChange("states", state)
+                  }}
                 >
+                  <div
+                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                      state === "All"
+                        ? filters.states.length === 0
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                        : filters.states.includes(state)
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                    }`}
+                  >
+                    {(state === "All" && filters.states.length === 0) ||
+                    (state !== "All" && filters.states.includes(state)) ? (
+                      <Check className="w-3 h-3 text-white" />
+                    ) : null}
+                  </div>
                   {state}
                 </div>
               ))}
@@ -1242,8 +1320,9 @@ const AccountLandscape = () => {
         </div>
       </div>
 
+      {/* Year Filter - Updated to allow multiple selections */}
       <div
-        className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2  items-center gap-2 cursor-pointer transition-all duration-300 ${
+        className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2 items-center gap-2 cursor-pointer transition-all duration-300 ${
           expanded ? "max-w-fit" : "w-20 justify-between"
         }`}
         onClick={toggleExpanded}
@@ -1257,12 +1336,17 @@ const AccountLandscape = () => {
                 <button
                   key={year}
                   className={`flex items-center text-[10px] py-1 px-4 rounded-full border transition ${
-                    filters.year === year ? "bg-[#217fad] text-white" : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                    year === "All"
+                      ? filters.years.length === 0
+                        ? "bg-[#217fad] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                      : filters.years.includes(year)
+                        ? "bg-[#217fad] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
                   }`}
                   onClick={(e) => {
                     e.stopPropagation() // Prevent parent div click
-                    handleFilterChange("year", year)
-                    // Removed setExpanded(false) to keep it open after selection
+                    handleFilterChange("years", year)
                   }}
                 >
                   {year}
@@ -1446,7 +1530,7 @@ const AccountLandscape = () => {
               <Bar
                 dataKey="<2"
                 stackId="a"
-                fill={filters.selectedAgeGroup === "<2" ? "#1a5a7c" : "#2c84b0"}
+                fill={filters.selectedAgeGroup === "<2" ? "#1a5a7c" : "#1b5a7d"}
                 onClick={(data) => handleAgeGroupBarClick(data, "<2")}
                 cursor="pointer"
               >
@@ -1462,7 +1546,7 @@ const AccountLandscape = () => {
               <Bar
                 dataKey="2-18"
                 stackId="a"
-                fill={filters.selectedAgeGroup === "2-18" ? "#5a6a7c" : "#8295ae"}
+                fill={filters.selectedAgeGroup === "2-18" ? "#5a6a7c" : "#5f6d87"}
                 onClick={(data) => handleAgeGroupBarClick(data, "2-18")}
                 cursor="pointer"
               >
@@ -1478,7 +1562,7 @@ const AccountLandscape = () => {
               <Bar
                 dataKey=">18"
                 stackId="a"
-                fill={filters.selectedAgeGroup === ">18" ? "#7a9ab0" : "#addaf0"}
+                fill={filters.selectedAgeGroup === ">18" ? "#7a9ab0" : "#7db8d8"}
                 radius={[10, 10, 0, 0]}
                 onClick={(data) => handleAgeGroupBarClick(data, ">18")}
                 cursor="pointer"
@@ -1495,15 +1579,15 @@ const AccountLandscape = () => {
           </ResponsiveContainer>
           <div className="flex gap-2 items-center justify-center p-2">
             <div className="flex gap-1 items-center">
-              <div className="bg-[#2c84b0] rounded-full w-2 h-2"></div>
+              <div className="bg-[#1b5a7d] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">{"<2"}</span>
             </div>
             <div className="flex gap-1 items-center">
-              <div className="bg-[#8295ae] rounded-full w-2 h-2"></div>
+              <div className="bg-[#5f6d87] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">{"2-18"}</span>
             </div>
             <div className="flex gap-1 items-center">
-              <div className="bg-[#addaf0] rounded-full w-2 h-2"></div>
+              <div className="bg-[#7db8d8] rounded-full w-2 h-2"></div>
               <span className="text-[10px] text-gray-600">{">18"}</span>
             </div>
           </div>
