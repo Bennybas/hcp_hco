@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList,Legend } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Legend } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
+import { PropagateLoader } from "react-spinners";
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -890,10 +891,16 @@ const HCPlandscape = () => {
     )
   }
 
+  // Helper function to determine if a value should show a label
+  // Only show labels for values that are significant (> 5%)
+  const shouldShowLabel = (value) => {
+    return Number.parseFloat(value) > 5
+  }
+
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center h-screen">
+          <PropagateLoader color="#0460A9" size={10} />
       </div>
     )
   }
@@ -1238,7 +1245,13 @@ const HCPlandscape = () => {
                 <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
-                <Legend  iconType="circle" iconSize={8}  wrapperStyle={{ fontSize: '9px' }} verticalAlign="bottom" align="center" />
+                <Legend
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: "9px" }}
+                  verticalAlign="bottom"
+                  align="center"
+                />
                 <Bar
                   dataKey="Zolgensma"
                   stackId="a"
@@ -1263,7 +1276,6 @@ const HCPlandscape = () => {
                   <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
                 </Bar>
               </BarChart>
-            
             </ResponsiveContainer>
             <div className="flex gap-2 items-center justify-center p-2">
               <div className="flex gap-1 items-center">
@@ -1308,12 +1320,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleAgeGroupBarClick(data, "<2")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="<2"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
 
@@ -1324,12 +1337,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleAgeGroupBarClick(data, "3-17")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="3-17"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
 
@@ -1341,12 +1355,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleAgeGroupBarClick(data, ">18")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey=">18"
                   position="insideTop"
                   fontSize={9}
                   fill={filters.selectedAgeGroup === ">18" ? "#fff" : "#333"}
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
             </BarChart>
@@ -1392,12 +1407,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "Child Neurology")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="Child Neurology"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1407,12 +1423,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "Neurology")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="Neurology"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1422,12 +1439,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "Neuromuscular")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="Neuromuscular"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1437,12 +1455,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "Pediatric")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="Pediatric"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1452,12 +1471,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "Radiology")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="Radiology"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1467,12 +1487,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "NP/PA")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="NP/PA"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
               <Bar
@@ -1483,12 +1504,13 @@ const HCPlandscape = () => {
                 onClick={(data) => handleSpecialtyBarClick(data, "All Others")}
                 cursor="pointer"
               >
+                {/* Only show label if value is significant */}
                 <LabelList
                   dataKey="All Others"
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
             </BarChart>

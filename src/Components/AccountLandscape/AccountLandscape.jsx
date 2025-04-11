@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, ChevronLeft, X, Check } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
+import { PropagateLoader } from "react-spinners";
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -835,36 +836,44 @@ const AccountLandscape = () => {
   // Handle filter changes for multi-select
   const handleFilterChange = (filterName, value) => {
     setFilters((prev) => {
-      const newFilters = { ...prev };
-  
+      const newFilters = { ...prev }
+
+      // Handle multi-select filters (years, ageFilters, brands, states)
       if (filterName === "years" || filterName === "ageFilters" || filterName === "brands" || filterName === "states") {
-        const currentValues = [...prev[filterName]];
-  
+        const currentValues = [...prev[filterName]]
+
         if (value === "All") {
-          return { ...prev, [filterName]: [] };
+          // If "All" is selected, clear all selections
+          return { ...prev, [filterName]: [] }
         } else {
-          const valueIndex = currentValues.indexOf(value);
+          const valueIndex = currentValues.indexOf(value)
+
           if (valueIndex === -1) {
-            currentValues.push(value);
+            // Add value if not present
+            currentValues.push(value)
           } else {
-            currentValues.splice(valueIndex, 1);
+            // Remove value if already present
+            currentValues.splice(valueIndex, 1)
           }
-  
-          newFilters[filterName] = currentValues;
+
+          newFilters[filterName] = currentValues
         }
       } else {
-        newFilters[filterName] = value;
+        // Handle single-select filters
+        newFilters[filterName] = value
       }
-  
-      return newFilters;
-    });
-  
-    setCurrentPage(1);
-  
-    // REMOVE this line to prevent dropdown from closing
-    // setOpenDropdown(null);
-  };
-  
+
+      return newFilters
+    })
+
+    // Reset to first page when filters change
+    setCurrentPage(1)
+
+    // Close dropdown after selection
+    // if (filterName !== "years") {
+    //   setOpenDropdown(null)
+    // }
+  }
 
   // Toggle filter buttons
   const toggleFilter = (filterName, value) => {
@@ -1058,12 +1067,18 @@ const AccountLandscape = () => {
     return `${values.length} selected`
   }
 
+  // Add this helper function after the getFilterDisplayText function (around line 600)
+  // Helper function to determine if a value should show a label
+  const shouldShowLabel = (value) => {
+    return Number.parseFloat(value) > 5
+  }
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center h-screen">
+          <PropagateLoader color="#0460A9" size={10} />
       </div>
-    )
+      )
   }
 
   return (
@@ -1074,7 +1089,6 @@ const AccountLandscape = () => {
         <div className="relative">
           <div
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
-           
             onClick={() => toggleDropdown("age")}
           >
             <span className="text-[12px] text-gray-600">Age: {getFilterDisplayText("ageFilters")}</span>
@@ -1487,7 +1501,15 @@ const AccountLandscape = () => {
                 onClick={(data) => handleDrugBarClick(data, "Evrysdi")}
                 cursor="pointer"
               >
-                <LabelList dataKey="total" position="top" fontSize={9} fill="#333" fontWeight="15px" offset={5} />
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  fontSize={9}
+                  fill="#333"
+                  fontWeight="15px"
+                  offset={5}
+                  formatter={(value) => (value > 0 ? value : "")}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1539,7 +1561,7 @@ const AccountLandscape = () => {
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
 
@@ -1555,7 +1577,7 @@ const AccountLandscape = () => {
                   position="insideTop"
                   fontSize={9}
                   fill="#fff"
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
 
@@ -1572,7 +1594,7 @@ const AccountLandscape = () => {
                   position="insideTop"
                   fontSize={9}
                   fill={filters.selectedAgeGroup === ">18" ? "#fff" : "#333"}
-                  formatter={(val) => `${Math.round(val)}%`}
+                  formatter={(val) => (shouldShowLabel(val) ? `${Math.round(val)}%` : "")}
                 />
               </Bar>
             </BarChart>

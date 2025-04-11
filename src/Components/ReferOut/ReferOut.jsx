@@ -1,11 +1,13 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { ChevronDown, Search, Loader } from "lucide-react"
+import { ChevronDown, Search, Loader, ChevronRight, ChevronLeft, Check } from "lucide-react"
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import JSONData from "../../data/refer.json"
+import { PropagateLoader } from "react-spinners";
+
 
 // Custom icons for the map
 const createMapIcon = (iconUrl, iconSize) => {
@@ -100,25 +102,37 @@ const ReferOut = ({ referType = "HCP" }) => {
   const [error, setError] = useState(null)
   const [filteredData, setFilteredData] = useState([])
   const [mapReady, setMapReady] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  const toggleExpanded = () => setExpanded(!expanded)
 
   const [filters, setFilters] = useState({
     // Common filters
     state: "All",
+    states: [], // New array for multi-select
     organizationFilter: "All", // "All", "Within", "Outside"
+    years: [], // New array for multi-select years
+    territories: [], // New array for multi-select territories
 
     // HCP filters
     hcpType: "All",
+    hcpTypes: [], // New array for multi-select
     hcpSpecialty: "All",
+    hcpSpecialties: [], // New array for multi-select
 
     // HCO filters
     hcoTier: "All",
+    hcoTiers: [], // New array for multi-select
     hcoArchetype: "All",
+    hcoArchetypes: [], // New array for multi-select
   })
 
   // State for filter options
   const [filterOptions, setFilterOptions] = useState({
     // Common filter options
     states: ["All"],
+    years: ["All"],
+    territories: ["All"],
 
     // HCP filter options
     hcpTypes: ["All"],
@@ -189,6 +203,26 @@ const ReferOut = ({ referType = "HCP" }) => {
           ]),
         ]
 
+        // Extract years, excluding 2016 and 2025
+        const years = [
+          "All",
+          ...new Set(
+            cleanedData
+              .map((item) => item.year)
+              .filter((year) => Boolean(year) && year !== "2016" && year !== "2025")
+              .sort((a, b) => b - a), // Sort years in descending order
+          ),
+        ]
+
+        // Extract territories
+        const territories = [
+          "All",
+          ...new Set([
+            ...cleanedData.map((item) => item.rend_hco_territory).filter(Boolean),
+            ...cleanedData.map((item) => item.ref_hco_territory).filter(Boolean),
+          ]),
+        ]
+
         // Extract filter options based on referType
         if (referType === "HCP") {
           const hcpTypes = ["All", ...new Set(cleanedData.map((item) => item.hcp_segment).filter(Boolean))]
@@ -197,6 +231,8 @@ const ReferOut = ({ referType = "HCP" }) => {
           setFilterOptions((prev) => ({
             ...prev,
             states,
+            years,
+            territories,
             hcpTypes,
             hcpSpecialties,
           }))
@@ -205,9 +241,14 @@ const ReferOut = ({ referType = "HCP" }) => {
           setFilters((prev) => ({
             ...prev,
             state: "All",
+            states: [],
+            years: [],
+            territories: [],
             organizationFilter: "All",
             hcpType: "All",
+            hcpTypes: [],
             hcpSpecialty: "All",
+            hcpSpecialties: [],
           }))
         } else {
           // HCO filters
@@ -217,6 +258,8 @@ const ReferOut = ({ referType = "HCP" }) => {
           setFilterOptions((prev) => ({
             ...prev,
             states,
+            years,
+            territories,
             hcoTiers,
             hcoArchetypes,
           }))
@@ -225,9 +268,14 @@ const ReferOut = ({ referType = "HCP" }) => {
           setFilters((prev) => ({
             ...prev,
             state: "All",
+            states: [],
+            years: [],
+            territories: [],
             organizationFilter: "All",
             hcoTier: "All",
+            hcoTiers: [],
             hcoArchetype: "All",
+            hcoArchetypes: [],
           }))
         }
 
@@ -257,8 +305,24 @@ const ReferOut = ({ referType = "HCP" }) => {
         let filtered = [...data]
 
         // Apply state filter (common for both HCP and HCO)
-        if (filters.state !== "All") {
-          filtered = filtered.filter((item) => item.hco_state === filters.state || item.ref_hco_state === filters.state)
+        if (filters.states.length > 0) {
+          filtered = filtered.filter(
+            (item) => filters.states.includes(item.hco_state) || filters.states.includes(item.ref_hco_state),
+          )
+        }
+
+        // Apply year filter
+        if (filters.years.length > 0) {
+          filtered = filtered.filter((item) => filters.years.includes(item.year))
+        }
+
+        // Apply territory filter
+        if (filters.territories.length > 0) {
+          filtered = filtered.filter(
+            (item) =>
+              filters.territories.includes(item.rend_hco_territory) ||
+              filters.territories.includes(item.ref_hco_territory),
+          )
         }
 
         // Apply organization filter (common for both HCP and HCO)
@@ -307,24 +371,24 @@ const ReferOut = ({ referType = "HCP" }) => {
         // Apply HCP-specific filters
         if (referType === "HCP") {
           // Apply HCP type filter
-          if (filters.hcpType !== "All") {
-            filtered = filtered.filter((item) => item.hcp_segment === filters.hcpType)
+          if (filters.hcpTypes.length > 0) {
+            filtered = filtered.filter((item) => filters.hcpTypes.includes(item.hcp_segment))
           }
 
           // Apply HCP specialty filter
-          if (filters.hcpSpecialty !== "All") {
-            filtered = filtered.filter((item) => item.final_spec === filters.hcpSpecialty)
+          if (filters.hcpSpecialties.length > 0) {
+            filtered = filtered.filter((item) => filters.hcpSpecialties.includes(item.final_spec))
           }
         } else {
           // Apply HCO-specific filters
           // Apply HCO tier filter
-          if (filters.hcoTier !== "All") {
-            filtered = filtered.filter((item) => item.hco_mdm_tier === filters.hcoTier)
+          if (filters.hcoTiers.length > 0) {
+            filtered = filtered.filter((item) => filters.hcoTiers.includes(item.hco_mdm_tier))
           }
 
           // Apply HCO archetype filter
-          if (filters.hcoArchetype !== "All") {
-            filtered = filtered.filter((item) => item.hco_grouping === filters.hcoArchetype)
+          if (filters.hcoArchetypes.length > 0) {
+            filtered = filtered.filter((item) => filters.hcoArchetypes.includes(item.hco_grouping))
           }
         }
 
@@ -356,20 +420,59 @@ const ReferOut = ({ referType = "HCP" }) => {
     return () => clearTimeout(timeoutId)
   }, [data, filters, selectedEntity, referType])
 
-  // Handle filter changes
+  // Helper function to get display text for multi-select filters
+  const getFilterDisplayText = (filterName) => {
+    const values = filters[filterName]
+    if (values.length === 0) return "All"
+    if (values.length === 1) return values[0]
+    return `${values.length} selected`
+  }
+
+  // Handle filter changes for multi-select
   const handleFilterChange = (filterName, value) => {
     // Show loading immediately
     setFilterLoading(true)
 
     // Use requestAnimationFrame to ensure the UI updates before processing
     requestAnimationFrame(() => {
-      setFilters((prev) => ({
-        ...prev,
-        [filterName]: value,
-      }))
+      setFilters((prev) => {
+        const newFilters = { ...prev }
 
-      // Close dropdown after selection
-      setOpenDropdown(null)
+        // Handle multi-select filters
+        if (
+          filterName === "states" ||
+          filterName === "years" ||
+          filterName === "territories" ||
+          filterName === "hcpTypes" ||
+          filterName === "hcpSpecialties" ||
+          filterName === "hcoTiers" ||
+          filterName === "hcoArchetypes"
+        ) {
+          const currentValues = [...prev[filterName]]
+
+          if (value === "All") {
+            // If "All" is selected, clear the array
+            return { ...prev, [filterName]: [] }
+          } else {
+            // Toggle the value
+            const valueIndex = currentValues.indexOf(value)
+            if (valueIndex === -1) {
+              // Add value if not present
+              currentValues.push(value)
+            } else {
+              // Remove value if already present
+              currentValues.splice(valueIndex, 1)
+            }
+
+            newFilters[filterName] = currentValues
+          }
+        } else {
+          // Handle single-select filters (for backward compatibility)
+          newFilters[filterName] = value
+        }
+
+        return newFilters
+      })
     })
   }
 
@@ -640,13 +743,22 @@ const ReferOut = ({ referType = "HCP" }) => {
 
     // Use requestAnimationFrame to ensure the UI updates before processing
     requestAnimationFrame(() => {
-      // Reset common filters
-      setFilters((prev) => ({
-        ...prev,
+      // Reset all filters
+      setFilters({
         state: "All",
+        states: [],
+        years: [],
+        territories: [],
         organizationFilter: "All",
-        ...(referType === "HCP" ? { hcpType: "All", hcpSpecialty: "All" } : { hcoTier: "All", hcoArchetype: "All" }),
-      }))
+        hcpType: "All",
+        hcpTypes: [],
+        hcpSpecialty: "All",
+        hcpSpecialties: [],
+        hcoTier: "All",
+        hcoTiers: [],
+        hcoArchetype: "All",
+        hcoArchetypes: [],
+      })
 
       setSelectedEntity({
         referring: null,
@@ -667,8 +779,8 @@ const ReferOut = ({ referType = "HCP" }) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center h-screen">
+          <PropagateLoader color="#0460A9" loading={loading} size={10} />
       </div>
     )
   }
@@ -685,32 +797,100 @@ const ReferOut = ({ referType = "HCP" }) => {
     <div className="flex flex-col gap-4 p-4">
       <div className="flex justify-between items-center">
         <div className="flex gap-2 flex-wrap">
-          {/* Common Filters - State Filter */}
+          {/* Common Filters - State Filter with checkbox */}
           <div className="relative">
             <div
               className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                filters.state !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
+                filters.states.length > 0 ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
               } cursor-pointer transition-colors duration-150`}
               onClick={() => toggleDropdown("state")}
             >
               <span
-                className={`text-[11px] ${filters.state !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
+                className={`text-[11px] ${filters.states.length > 0 ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
               >
-                State: {filters.state}
+                State: {getFilterDisplayText("states")}
               </span>
-              <ChevronDown className={`w-4 h-4 ${filters.state !== "All" ? "text-[#0460A9]" : "text-gray-500"}`} />
+              <ChevronDown className={`w-4 h-4 ${filters.states.length > 0 ? "text-[#0460A9]" : "text-gray-500"}`} />
             </div>
             {openDropdown === "state" && (
               <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
                 {filterOptions.states.map((state, i) => (
                   <div
                     key={i}
-                    className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                      filters.state === state ? "bg-blue-50 text-blue-600" : ""
-                    }`}
-                    onClick={() => handleFilterChange("state", state)}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("states", state)
+                    }}
                   >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        state === "All"
+                          ? filters.states.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.states.includes(state)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(state === "All" && filters.states.length === 0) ||
+                      (state !== "All" && filters.states.includes(state)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
                     {state}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Territory Filter - New filter with checkbox */}
+          <div className="relative">
+            <div
+              className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
+                filters.territories.length > 0 ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
+              } cursor-pointer transition-colors duration-150`}
+              onClick={() => toggleDropdown("territory")}
+            >
+              <span
+                className={`text-[11px] ${filters.territories.length > 0 ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
+              >
+                Territory: {getFilterDisplayText("territories")}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 ${filters.territories.length > 0 ? "text-[#0460A9]" : "text-gray-500"}`}
+              />
+            </div>
+            {openDropdown === "territory" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md  z-[1000] w-48 max-h-40 overflow-y-auto">
+                {filterOptions.territories.map((territory, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("territories", territory)
+                    }}
+                  >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        territory === "All"
+                          ? filters.territories.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.territories.includes(territory)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(territory === "All" && filters.territories.length === 0) ||
+                      (territory !== "All" && filters.territories.includes(territory)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    {territory}
                   </div>
                 ))}
               </div>
@@ -743,23 +923,23 @@ const ReferOut = ({ referType = "HCP" }) => {
           </div>
 
           {referType === "HCP" ? (
-            // HCP Filters
+            // HCP Filters with checkboxes
             <>
               {/* HCP Type Filter */}
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcpType !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
+                    filters.hcpTypes.length > 0 ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcpType")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcpType !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcpTypes.length > 0 ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
                   >
-                    HCP Type: {filters.hcpType}
+                    HCP Type: {getFilterDisplayText("hcpTypes")}
                   </span>
                   <ChevronDown
-                    className={`w-4 h-4 ${filters.hcpType !== "All" ? "text-[#0460A9]" : "text-gray-500"}`}
+                    className={`w-4 h-4 ${filters.hcpTypes.length > 0 ? "text-[#0460A9]" : "text-gray-500"}`}
                   />
                 </div>
                 {openDropdown === "hcpType" && (
@@ -767,11 +947,28 @@ const ReferOut = ({ referType = "HCP" }) => {
                     {filterOptions.hcpTypes.map((type, i) => (
                       <div
                         key={i}
-                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                          filters.hcpType === type ? "bg-blue-50 text-blue-600" : ""
-                        }`}
-                        onClick={() => handleFilterChange("hcpType", type)}
+                        className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleFilterChange("hcpTypes", type)
+                        }}
                       >
+                        <div
+                          className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                            type === "All"
+                              ? filters.hcpTypes.length === 0
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                              : filters.hcpTypes.includes(type)
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                          }`}
+                        >
+                          {(type === "All" && filters.hcpTypes.length === 0) ||
+                          (type !== "All" && filters.hcpTypes.includes(type)) ? (
+                            <Check className="w-3 h-3 text-white" />
+                          ) : null}
+                        </div>
                         {type}
                       </div>
                     ))}
@@ -783,17 +980,17 @@ const ReferOut = ({ referType = "HCP" }) => {
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcpSpecialty !== "All" ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
+                    filters.hcpSpecialties.length > 0 ? "border-[#0460A9] bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcpSpecialty")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcpSpecialty !== "All" ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcpSpecialties.length > 0 ? "text-[#0460A9] font-medium" : "text-gray-600"}`}
                   >
-                    HCP Specialty: {filters.hcpSpecialty}
+                    HCP Specialty: {getFilterDisplayText("hcpSpecialties")}
                   </span>
                   <ChevronDown
-                    className={`w-4 h-4 ${filters.hcpSpecialty !== "All" ? "text-[#0460A9]" : "text-gray-500"}`}
+                    className={`w-4 h-4 ${filters.hcpSpecialties.length > 0 ? "text-[#0460A9]" : "text-gray-500"}`}
                   />
                 </div>
                 {openDropdown === "hcpSpecialty" && (
@@ -801,12 +998,28 @@ const ReferOut = ({ referType = "HCP" }) => {
                     {filterOptions.hcpSpecialties.map((specialty, i) => (
                       <div
                         key={i}
-                        className={`p-2 text-[12px] hover:bg-
-                        className={\`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                          filters.hcpSpecialty === specialty ? "bg-blue-50 text-blue-600" : ""
-                        }`}
-                        onClick={() => handleFilterChange("hcpSpecialty", specialty)}
+                        className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleFilterChange("hcpSpecialties", specialty)
+                        }}
                       >
+                        <div
+                          className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                            specialty === "All"
+                              ? filters.hcpSpecialties.length === 0
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                              : filters.hcpSpecialties.includes(specialty)
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                          }`}
+                        >
+                          {(specialty === "All" && filters.hcpSpecialties.length === 0) ||
+                          (specialty !== "All" && filters.hcpSpecialties.includes(specialty)) ? (
+                            <Check className="w-3 h-3 text-white" />
+                          ) : null}
+                        </div>
                         {specialty}
                       </div>
                     ))}
@@ -815,33 +1028,52 @@ const ReferOut = ({ referType = "HCP" }) => {
               </div>
             </>
           ) : (
-            // HCO Filters
+            // HCO Filters with checkboxes
             <>
               {/* HCO Tier Filter */}
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcoTier !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                    filters.hcoTiers.length > 0 ? "border-blue-400 bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcoTier")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcoTier !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcoTiers.length > 0 ? "text-blue-600 font-medium" : "text-gray-600"}`}
                   >
-                    HCO Tier: {filters.hcoTier}
+                    HCO Tier: {getFilterDisplayText("hcoTiers")}
                   </span>
-                  <ChevronDown className={`w-4 h-4 ${filters.hcoTier !== "All" ? "text-blue-500" : "text-gray-500"}`} />
+                  <ChevronDown
+                    className={`w-4 h-4 ${filters.hcoTiers.length > 0 ? "text-blue-500" : "text-gray-500"}`}
+                  />
                 </div>
                 {openDropdown === "hcoTier" && (
                   <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-[60] w-48 max-h-40 overflow-y-auto">
                     {filterOptions.hcoTiers.map((tier, i) => (
                       <div
                         key={i}
-                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                          filters.hcoTier === tier ? "bg-blue-50 text-blue-600" : ""
-                        }`}
-                        onClick={() => handleFilterChange("hcoTier", tier)}
+                        className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleFilterChange("hcoTiers", tier)
+                        }}
                       >
+                        <div
+                          className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                            tier === "All"
+                              ? filters.hcoTiers.length === 0
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                              : filters.hcoTiers.includes(tier)
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                          }`}
+                        >
+                          {(tier === "All" && filters.hcoTiers.length === 0) ||
+                          (tier !== "All" && filters.hcoTiers.includes(tier)) ? (
+                            <Check className="w-3 h-3 text-white" />
+                          ) : null}
+                        </div>
                         {tier}
                       </div>
                     ))}
@@ -853,17 +1085,17 @@ const ReferOut = ({ referType = "HCP" }) => {
               <div className="relative">
                 <div
                   className={`flex py-2 px-2 bg-white rounded-xl gap-2 items-center border-b border-x ${
-                    filters.hcoArchetype !== "All" ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                    filters.hcoArchetypes.length > 0 ? "border-blue-400 bg-blue-50" : "border-gray-300"
                   } cursor-pointer transition-colors duration-150`}
                   onClick={() => toggleDropdown("hcoArchetype")}
                 >
                   <span
-                    className={`text-[11px] ${filters.hcoArchetype !== "All" ? "text-blue-600 font-medium" : "text-gray-600"}`}
+                    className={`text-[11px] ${filters.hcoArchetypes.length > 0 ? "text-blue-600 font-medium" : "text-gray-600"}`}
                   >
-                    Account Archetype: {filters.hcoArchetype}
+                    Account Archetype: {getFilterDisplayText("hcoArchetypes")}
                   </span>
                   <ChevronDown
-                    className={`w-4 h-4 ${filters.hcoArchetype !== "All" ? "text-blue-500" : "text-gray-500"}`}
+                    className={`w-4 h-4 ${filters.hcoArchetypes.length > 0 ? "text-blue-500" : "text-gray-500"}`}
                   />
                 </div>
                 {openDropdown === "hcoArchetype" && (
@@ -871,11 +1103,28 @@ const ReferOut = ({ referType = "HCP" }) => {
                     {filterOptions.hcoArchetypes.map((archetype, i) => (
                       <div
                         key={i}
-                        className={`p-2 text-[12px] hover:bg-gray-100 cursor-pointer ${
-                          filters.hcoArchetype === archetype ? "bg-blue-50 text-blue-600" : ""
-                        }`}
-                        onClick={() => handleFilterChange("hcoArchetype", archetype)}
+                        className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleFilterChange("hcoArchetypes", archetype)
+                        }}
                       >
+                        <div
+                          className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                            archetype === "All"
+                              ? filters.hcoArchetypes.length === 0
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                              : filters.hcoArchetypes.includes(archetype)
+                                ? "bg-blue-500 border-blue-500"
+                                : "border-gray-300"
+                          }`}
+                        >
+                          {(archetype === "All" && filters.hcoArchetypes.length === 0) ||
+                          (archetype !== "All" && filters.hcoArchetypes.includes(archetype)) ? (
+                            <Check className="w-3 h-3 text-white" />
+                          ) : null}
+                        </div>
                         {archetype}
                       </div>
                     ))}
@@ -893,6 +1142,46 @@ const ReferOut = ({ referType = "HCP" }) => {
         >
           Reset Filters
         </button>
+      </div>
+
+      {/* Year Filter - Expandable like in other components */}
+      <div
+        className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2 items-center gap-2 cursor-pointer transition-all duration-300 ${
+          expanded ? "max-w-fit" : "w-20 justify-between"
+        }`}
+        onClick={toggleExpanded}
+      >
+        <span className="text-gray-600 text-[12px]">Year</span>
+
+        {expanded ? (
+          <>
+            <div className="flex flex-wrap gap-2 ml-2 mr-2">
+              {filterOptions.years.map((year) => (
+                <button
+                  key={year}
+                  className={`flex items-center text-[10px] py-1 px-4 rounded-full border transition ${
+                    year === "All"
+                      ? filters.years.length === 0
+                        ? "bg-[#217fad] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                      : filters.years.includes(year)
+                        ? "bg-[#217fad] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation() // Prevent parent div click
+                    handleFilterChange("years", year)
+                  }}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+            <ChevronLeft className="text-gray-600 w-4 h-4 ml-auto" />
+          </>
+        ) : (
+          <ChevronRight className="text-gray-600 w-4 h-4" />
+        )}
       </div>
 
       <div className="flex gap-4 w-full">
@@ -1020,16 +1309,16 @@ const ReferOut = ({ referType = "HCP" }) => {
                   onClick={() => handleEntitySelect("rendering", entity.name)}
                 >
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-gray-800">{entity.name}
-                    {selectedEntity.referring && (
-                      <span
-                        className={`text-[8px] px-1 py-0.5 rounded ${entity.isWithinOrg ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
-                      >
-                        {entity.isWithinOrg ? "Within" : "Outside"}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-gray-800">
+                      {entity.name}
+                      {selectedEntity.referring && (
+                        <span
+                          className={`text-[8px] px-1 py-0.5 rounded ${entity.isWithinOrg ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+                        >
+                          {entity.isWithinOrg ? "Within" : "Outside"}
+                        </span>
+                      )}
                     </span>
-                    
                   </div>
                   <span className="text-[10px] text-gray-800">{entity.count}</span>
                 </div>
