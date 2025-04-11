@@ -70,7 +70,6 @@ const stateNameToAbbreviation = Object.entries(stateAbbreviationToName).reduce((
   return acc
 }, {})
 
-
 const COLOR_RANGE = [
   "#f7fbff", // Lightest
   "#e3eef9",
@@ -150,13 +149,13 @@ const groupingColors = {
   Unspecified: "#CCCCCC", // Light gray for unspecified/missing values
 }
 
-const USAMap = ({ onStateSelect }) => {
+const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], selectedYears = [] }) => {
   const navigate = useNavigate()
   const [mapData, setMapData] = useState([])
+  const [filteredMapData, setFilteredMapData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tooltipContent, setTooltipContent] = useState("")
-  const [selectedState, setSelectedState] = useState(null)
   const [zipTooltipContent, setZipTooltipContent] = useState("")
   const [showAllZips, setShowAllZips] = useState(false)
   const mapContainerId = useRef(`leaflet-map-container-${Math.random().toString(36).substring(2, 9)}`)
@@ -223,6 +222,7 @@ const USAMap = ({ onStateSelect }) => {
           })
 
         setMapData(cleanedData)
+        setFilteredMapData(cleanedData)
       } catch (error) {
         console.error("Error fetching map data:", error)
         setError("Error fetching data: " + error.message)
@@ -233,6 +233,40 @@ const USAMap = ({ onStateSelect }) => {
 
     fetchData()
   }, [])
+
+  // Filter map data based on selected filters
+  useEffect(() => {
+    if (mapData.length === 0) return
+
+    let filtered = [...mapData]
+
+    // Apply state filter
+    if (selectedState) {
+      filtered = filtered.filter(
+        (item) =>
+          item.hcp_state === selectedState ||
+          item.hco_state === selectedState ||
+          item.ref_hcp_state === selectedState ||
+          item.ref_hco_state === selectedState,
+      )
+    }
+
+    // Apply year filter
+    if (selectedYears && selectedYears.length > 0) {
+      filtered = filtered.filter((item) => selectedYears.includes(item.year))
+    }
+
+    // Apply territory filter
+    if (selectedTerritories && selectedTerritories.length > 0) {
+      filtered = filtered.filter(
+        (item) =>
+          (item.rend_hco_territory && selectedTerritories.includes(item.rend_hco_territory)) ||
+          (item.ref_hco_territory && selectedTerritories.includes(item.ref_hco_territory)),
+      )
+    }
+
+    setFilteredMapData(filtered)
+  }, [mapData, selectedState, selectedYears, selectedTerritories])
 
   // Process data to get counts by state
   const { hcpStateCounts, hcoStateCounts, patientStateCounts, hcpZipData, hcoZipData, locationData } = useMemo(() => {
@@ -249,7 +283,7 @@ const USAMap = ({ onStateSelect }) => {
     const locationMap = new Map() // Map of state -> Array of location objects
 
     // Process each record
-    mapData.forEach((record) => {
+    filteredMapData.forEach((record) => {
       const hcpId = record.hcp_id
       const hcoId = record.hco_mdm
       const patientId = record.patient_id
@@ -258,14 +292,6 @@ const USAMap = ({ onStateSelect }) => {
       const hcpZip = record.hcp_zip
       const hcoZip = record.hco_postal_cd_prim
       const hcoGrouping = record.hco_grouping
-
-      // Fix: Ensure we're getting the correct HCO name
-      // Log the record to see what fields are available
-      // console.log("Record HCO name fields:", {
-      //   hco_mdm_name: record.hco_mdm_name,
-      //   hco_name: record.hco_name,
-      //   hco_grouping: record.hco_grouping,
-      // })
 
       // Use a more robust fallback chain for HCO name
       const hcoName = record.hco_mdm_name || record.hco_name || "Healthcare Organization"
@@ -425,7 +451,7 @@ const USAMap = ({ onStateSelect }) => {
       hcoZipData,
       locationData,
     }
-  }, [mapData])
+  }, [filteredMapData])
 
   // Create color scale based on patient counts
   const colorScale = useMemo(() => {
@@ -525,9 +551,6 @@ const USAMap = ({ onStateSelect }) => {
 
         console.log(`Adding ${stateLocations.length} markers for ${stateAbbr}`)
 
-        // First, let's add some debug logging to see what names are available
-        console.log("State locations data:", stateLocations)
-
         // Then modify the marker creation to ensure we're using the correct name
         stateLocations.forEach((location) => {
           if (!location.lat || !location.lng || isNaN(location.lat) || isNaN(location.lng)) return
@@ -537,9 +560,6 @@ const USAMap = ({ onStateSelect }) => {
           const lng = Number.parseFloat(location.lng)
 
           if (isNaN(lat) || isNaN(lng)) return
-
-          // Debug the location name
-          console.log("Location name:", location.name, "Location ID:", location.id, "Grouping:", location.grouping)
 
           // Get the color based on grouping
           const markerColor = groupingColors[location.grouping] || groupingColors["Unspecified"]
@@ -753,8 +773,6 @@ const USAMap = ({ onStateSelect }) => {
           zoomToBoundsOnClick: true,
           spiderfyOnMaxZoom: true,
           removeOutsideVisibleBounds: false,
-          disableClusteringAtZoom: 8, // Show          true,
-          removeOutsideVisibleBounds: false,
           disableClusteringAtZoom: 8, // Show individual markers at zoom level 8 and above
           maxClusterRadius: 80, // Larger value creates fewer, larger clusters
         })
@@ -860,7 +878,6 @@ const USAMap = ({ onStateSelect }) => {
                         // Handle state selection
                         if (selectedState === stateAbbr) {
                           // Deselect state
-                          setSelectedState(null)
                           if (onStateSelect) onStateSelect(null)
 
                           // Reset view
@@ -872,7 +889,6 @@ const USAMap = ({ onStateSelect }) => {
                           }
                         } else {
                           // Select state
-                          setSelectedState(stateAbbr)
                           if (onStateSelect) onStateSelect(stateAbbr)
 
                           // Zoom to state
@@ -977,18 +993,18 @@ const USAMap = ({ onStateSelect }) => {
     }
   }, [colorScale, patientStateCounts])
 
-  // Also modify the useEffect for selectedState changes to ensure markers persist
+  // Update markers when selectedState or filters change
   useEffect(() => {
     if (!mapInstanceRef.current || !mapMountedRef.current) return
 
     try {
       if (selectedState) {
-        console.log("Selected state changed to:", selectedState)
+        console.log("Selected state or filters changed, updating markers")
 
         // Use a longer timeout to ensure map is fully zoomed before adding markers
         const timer = setTimeout(() => {
           if (mapInstanceRef.current && mapMountedRef.current) {
-            console.log("Adding markers after state selection change")
+            console.log("Adding markers after state selection or filter change")
             addStateMarkers(selectedState)
           }
         }, 800)
@@ -998,9 +1014,9 @@ const USAMap = ({ onStateSelect }) => {
         markerClusterRef.current.clearLayers()
       }
     } catch (error) {
-      console.error("Error updating markers on state change:", error)
+      console.error("Error updating markers on state or filter change:", error)
     }
-  }, [selectedState])
+  }, [selectedState, filteredMapData])
 
   // Handle window resize
   useEffect(() => {
@@ -1061,7 +1077,6 @@ const USAMap = ({ onStateSelect }) => {
             display: tooltipContent ? "block" : "none",
             left: "30%",
             bottom: "10px",
-
             transform: "translateX(-50%)",
           }}
           dangerouslySetInnerHTML={{ __html: tooltipContent }}
@@ -1087,7 +1102,6 @@ const USAMap = ({ onStateSelect }) => {
             <div className="ml-1 text-[10px]">High</div>
           </div>
           <div className="grid grid-cols-2 mt-2 gap-1">
-            {/* <div className="text-[10px] font-medium">HCO Groupings</div> */}
             <div className="flex items-center">
               <div className="w-2 h-2 mr-1" style={{ backgroundColor: groupingColors["CURRENT IV"] }}></div>
               <span className="text-[8px]">CURRENT IV</span>

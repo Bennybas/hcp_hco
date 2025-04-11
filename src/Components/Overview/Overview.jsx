@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom"
 import USAMap from "./Map"
 import api from "../api/api"
 import { ChevronDown, X } from "lucide-react"
-import { PropagateLoader } from "react-spinners";
+import { PropagateLoader } from "react-spinners"
 
 const Overview = () => {
   const navigate = useNavigate()
@@ -38,6 +38,11 @@ const Overview = () => {
   const [yearOptions, setYearOptions] = useState([])
   const [selectedYears, setSelectedYears] = useState([])
   const [showYearDropdown, setShowYearDropdown] = useState(false)
+
+  // Territory filter state
+  const [territoryOptions, setTerritoryOptions] = useState([])
+  const [selectedTerritories, setSelectedTerritories] = useState([])
+  const [showTerritoryDropdown, setShowTerritoryDropdown] = useState(false)
 
   // HCP segment and HCO grouping filters
   const [selectedHcpSegment, setSelectedHcpSegment] = useState(null)
@@ -69,6 +74,15 @@ const Overview = () => {
         filtered = filtered.filter((item) => selectedYears.includes(item.year))
       }
 
+      // Apply territory filter
+      if (selectedTerritories.length > 0) {
+        filtered = filtered.filter(
+          (item) =>
+            (item.rend_hco_territory && selectedTerritories.includes(item.rend_hco_territory)) ||
+            (item.ref_hco_territory && selectedTerritories.includes(item.ref_hco_territory)),
+        )
+      }
+
       // Apply HCP segment filter
       if (selectedHcpSegment) {
         filtered = filtered.filter((item) => {
@@ -95,7 +109,7 @@ const Overview = () => {
       setFilteredData(filtered)
       calculateMetrics(filtered, selectedState)
     }
-  }, [selectedState, selectedYears, selectedHcpSegment, selectedHcoGrouping, data])
+  }, [selectedState, selectedYears, selectedTerritories, selectedHcpSegment, selectedHcoGrouping, data])
 
   const fetchData = async () => {
     try {
@@ -147,6 +161,18 @@ const Overview = () => {
         .sort((a, b) => b - a) // Sort years in descending order
 
       setYearOptions(years)
+
+      // Extract unique territories from both rend_hco_territory and ref_hco_territory
+      const territories = [
+        ...new Set([
+          ...jsonData.map((item) => item.rend_hco_territory),
+          ...jsonData.map((item) => item.ref_hco_territory),
+        ]),
+      ]
+        .filter((territory) => territory && territory !== "-" && territory !== null)
+        .sort() // Sort alphabetically
+
+      setTerritoryOptions(territories)
 
       // Keep the data in memory only
       setData(jsonData)
@@ -215,7 +241,7 @@ const Overview = () => {
             hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
           }
           if (item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
-            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase()) 
+            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase())
           }
         } else {
           // Fallback: Add specialty if missing
@@ -305,7 +331,7 @@ const Overview = () => {
 
     const topHCPs = hcpVolume.sort((a, b) => b.volume - a.volume).slice(0, 10)
 
-    // Calculate Top HCOs by patient volume - with HCO IDs and grouping
+    // Calculate Top HCOs by patient volume - with HCO I
     const hcoVolume = Array.from(hcoPatientMap.entries()).map(([hcoId, patients]) => {
       const hcoName = hcoIdToNameMap.get(hcoId) || "Unknown"
       return {
@@ -359,6 +385,17 @@ const Overview = () => {
     })
   }
 
+  // Handle territory selection
+  const handleTerritoryToggle = (territory) => {
+    setSelectedTerritories((prev) => {
+      if (prev.includes(territory)) {
+        return prev.filter((t) => t !== territory)
+      } else {
+        return [...prev, territory]
+      }
+    })
+  }
+
   // Handle HCP segment selection from chart
   const handleHcpSegmentSelect = (segment) => {
     if (selectedHcpSegment === segment) {
@@ -381,6 +418,7 @@ const Overview = () => {
   const clearAllFilters = () => {
     setSelectedState(null)
     setSelectedYears([])
+    setSelectedTerritories([])
     setSelectedHcpSegment(null)
     setSelectedHcoGrouping(null)
   }
@@ -403,7 +441,7 @@ const Overview = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-          <PropagateLoader color="#0460A9" size={10} />
+        <PropagateLoader color="#0460A9" size={10} />
       </div>
     )
   }
@@ -415,11 +453,18 @@ const Overview = () => {
           {/* Year Filter Dropdown */}
           <div className="relative">
             <div
-              className="flex bg-white rounded-lg items-center justify-between p-2 cursor-pointer min-w-[120px]"
+              className={`flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px] ${
+                selectedYears.length > 0 ? "border-b-[#0460A9] border-x-[#0460A9]  border" : ""
+              }`}
               onClick={() => setShowYearDropdown(!showYearDropdown)}
             >
               <span className="text-[12px] text-gray-600">
-                Year: {selectedYears.length === 0 ? "All" : selectedYears.join(", ")}
+                Year:{" "}
+                {selectedYears.length === 0
+                  ? "All"
+                  : selectedYears.length === 1
+                    ? selectedYears[0]
+                    : `${selectedYears.length} selected`}
               </span>
               <ChevronDown className="w-4 h-4" />
             </div>
@@ -448,8 +493,60 @@ const Overview = () => {
             )}
           </div>
 
+          {/* Territory Filter Dropdown */}
+          <div className="relative">
+            <div
+              className={`flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px] ${
+                selectedTerritories.length > 0 ? "border-b-[#0460A9] border-x-[#0460A9]  border" : ""
+              }`}
+              onClick={() => setShowTerritoryDropdown(!showTerritoryDropdown)}
+            >
+              <span className="text-[12px] text-gray-600">
+                Territory:{" "}
+                {selectedTerritories.length === 0
+                  ? "All"
+                  : selectedTerritories.length === 1
+                    ? selectedTerritories[0]
+                    : `${selectedTerritories.length} selected`}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+
+            {showTerritoryDropdown && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-48 max-h-60 overflow-y-auto">
+                {territoryOptions.map((territory) => (
+                  <div
+                    key={territory}
+                    className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleTerritoryToggle(territory)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTerritories.includes(territory)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    <span className="text-[12px]">{territory}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Active Filters Display */}
           <div className="flex flex-wrap gap-2">
+            {selectedState && (
+              <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+                State: {ABBR_TO_STATE[selectedState]}
+                <button onClick={() => setSelectedState(null)} className="ml-1 text-blue-600 hover:text-blue-800">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+
             {selectedHcpSegment && (
               <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
                 HCP Segment: {selectedHcpSegment}
@@ -468,7 +565,11 @@ const Overview = () => {
               </div>
             )}
 
-            {(selectedState || selectedYears.length > 0 || selectedHcpSegment || selectedHcoGrouping) && (
+            {(selectedState ||
+              selectedYears.length > 0 ||
+              selectedTerritories.length > 0 ||
+              selectedHcpSegment ||
+              selectedHcoGrouping) && (
               <button
                 onClick={clearAllFilters}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-2 py-1 text-[11px] flex items-center"
@@ -479,20 +580,6 @@ const Overview = () => {
             )}
           </div>
         </div>
-
-        {/* {selectedState && (
-          <div className="px-4 rounded-md text-center flex justify-end w-full">
-            <span className="text-[12px] font-medium">
-              Showing data for: <span className="text-blue-700">{ABBR_TO_STATE[selectedState]}</span>
-              <button
-                onClick={() => setSelectedState(null)}
-                className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-xl text-xs hover:bg-blue-200"
-              >
-                Clear Filter
-              </button>
-            </span>
-          </div>
-        )} */}
       </div>
 
       <div className="flex gap-4 w-full p-2">
@@ -572,7 +659,12 @@ const Overview = () => {
         </div>
 
         <div className="flex flex-col w-[42%] ">
-          <USAMap onStateSelect={handleStateSelect} />
+          <USAMap
+            onStateSelect={handleStateSelect}
+            selectedState={selectedState}
+            selectedTerritories={selectedTerritories}
+            selectedYears={selectedYears}
+          />
         </div>
 
         <div className="flex flex-col w-[29%] gap-2">
