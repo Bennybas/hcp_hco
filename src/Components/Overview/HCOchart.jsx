@@ -24,18 +24,30 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
 
     const groupMap = new Map()
 
+    // Process both rendering and referring HCOs (UNION approach)
     HCOdata.forEach((record) => {
-      let group = record.hco_grouping
-      const hco = record.hco_mdm
+      // Process rendering HCO
+      if (record.hco_mdm && record.hco_mdm !== "-") {
+        let group = record.hco_grouping
+        group = formatGroupName(group)
 
-      if (!group || group === "-" || !hco) return
-
-      group = formatGroupName(group)
-
-      if (!groupMap.has(group)) {
-        groupMap.set(group, new Set())
+        if (!groupMap.has(group)) {
+          groupMap.set(group, new Set())
+        }
+        groupMap.get(group).add(record.hco_mdm)
       }
-      groupMap.get(group).add(hco)
+
+      // Process referring HCO
+      if (record.ref_hco_npi_mdm && record.ref_hco_npi_mdm !== "-") {
+        // Use the grouping if available, otherwise use "UNSPECIFIED"
+        let group = record.hco_grouping || "UNSPECIFIED"
+        group = formatGroupName(group)
+
+        if (!groupMap.has(group)) {
+          groupMap.set(group, new Set())
+        }
+        groupMap.get(group).add(record.ref_hco_npi_mdm)
+      }
     })
 
     const result = displayOrder.map((group) => {
@@ -83,7 +95,13 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
           <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} HCOs`, "Volume"]} />
-          <Bar dataKey="value" radius={[0, 8, 8, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 9,dx: 4 }}>
+          <Bar
+            dataKey="value"
+            radius={[0, 8, 8, 0]}
+            onClick={handleBarClick}
+            cursor="pointer"
+            label={{ position: "insideRight", fill: "#fff", fontSize: 9, dx: 4 }}
+          >
             {segmentData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
@@ -92,7 +110,6 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
                 strokeWidth={entry.isSelected ? 1 : 0}
               />
             ))}
-            
           </Bar>
         </BarChart>
       </ResponsiveContainer>

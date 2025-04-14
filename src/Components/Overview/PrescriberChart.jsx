@@ -7,10 +7,6 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
   const formatSegmentName = (segment) => {
     if (!segment) return ""
     segment = segment.toUpperCase()
-    // if (["VERY LOW", "V. LOW", "V.LOW", "VLOW"].includes(segment)) return "V. LOW"
-    // if (segment === "LOW") return "LOW"
-    // if (["MODERATE", "MED", "MEDIUM"].includes(segment)) return "MEDIUM"
-    // if (segment === "HIGH") return "HIGH"
     return segment
   }
 
@@ -19,8 +15,9 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
 
     const segmentPatientMap = new Map()
 
+    // Keep the existing logic but ensure territory filter is respected
     hcpData.forEach((record) => {
-      if (record.hcp_segment && record.hcp_id) {
+      if (record.hcp_segment && record.hcp_id && record.hcp_id !== "-") {
         const rawSegment = record.hcp_segment.toUpperCase()
         const formattedSegment = formatSegmentName(rawSegment)
         if (!segmentPatientMap.has(formattedSegment)) {
@@ -81,9 +78,15 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
               <Tooltip
                 cursor={{ fill: "#f0f0f0" }}
                 wrapperStyle={{ fontSize: "10px" }}
-                formatter={(value) => [`${value} patients`, "Volume"]}
+                formatter={(value) => [`${value} HCPs`, "Volume"]}
               />
-              <Bar dataKey="value" radius={[0, 10, 10, 0]} onClick={handleBarClick} cursor="pointer" label={{ position: "insideRight", fill: "#fff", fontSize: 9,dx: 4 }}>
+              <Bar
+                dataKey="value"
+                radius={[0, 10, 10, 0]}
+                onClick={handleBarClick}
+                cursor="pointer"
+                label={{ position: "insideRight", fill: "#fff", fontSize: 9, dx: 4 }}
+              >
                 {segmentData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}

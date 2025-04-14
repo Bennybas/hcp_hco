@@ -63,12 +63,38 @@ const stateAbbreviationToName = {
   WI: "Wisconsin",
   WY: "Wyoming",
   DC: "District of Columbia",
+  PR: "Puerto Rico",
 }
 
 const stateNameToAbbreviation = Object.entries(stateAbbreviationToName).reduce((acc, [abbr, name]) => {
   acc[name] = abbr
   return acc
 }, {})
+
+// Territory to states mapping
+const territoryToStates = {
+  SOUTHEAST: ["SC", "GA", "PR", "NC", "FL"],
+  MIDWEST: ["IN", "OK", "KS", "KY", "IL", "IA", "MO", "NE"],
+  "NEW ENGLAND": ["CT", "PA", "MA", "RI", "NH", "ME", "NY", "VT"],
+  "SOUTH CENTRAL": ["KY", "MS", "LA", "TN", "TX", "AL"],
+  "UPPER MIDWEST": ["MN", "SD", "WI", "ND", "IL"],
+  "OHIO VALLEY": ["OH", "MI"],
+  CAPITOL: ["DC", "MD", "WV", "VA", "NJ", "PA", "DE"],
+  TEXAS: ["AR", "TX", "MO"],
+  "ROCKY MOUNTAIN": ["WY", "WA", "MT", "ID", "OR", "AK", "NM", "MO", "CO", "UT", "NV"],
+  SOUTHWEST: ["HI", "CA", "AZ"],
+}
+
+// Create a reverse mapping from state to territory
+const stateToTerritory = {}
+Object.entries(territoryToStates).forEach(([territory, states]) => {
+  states.forEach((state) => {
+    if (!stateToTerritory[state]) {
+      stateToTerritory[state] = []
+    }
+    stateToTerritory[state].push(territory)
+  })
+})
 
 const COLOR_RANGE = [
   "#f7fbff", // Lightest
@@ -135,6 +161,7 @@ const stateCenters = {
   WI: [44.6243, -89.9941, 6],
   WY: [42.9957, -107.5512, 7],
   DC: [38.9101, -77.0147, 10],
+  PR: [18.2208, -66.5901, 8],
 }
 
 // GeoJSON data for US states
@@ -256,17 +283,47 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
       filtered = filtered.filter((item) => selectedYears.includes(item.year))
     }
 
-    // Apply territory filter
+    // Apply territory filter using UNION logic
     if (selectedTerritories && selectedTerritories.length > 0) {
-      filtered = filtered.filter(
-        (item) =>
-          (item.rend_hco_territory && selectedTerritories.includes(item.rend_hco_territory)) ||
-          (item.ref_hco_territory && selectedTerritories.includes(item.ref_hco_territory)),
-      )
+      filtered = filtered.filter((item) => {
+        // Check if any of the states associated with this record belong to the selected territories
+        const states = new Set()
+
+        // Add all states from the record
+        if (item.hcp_state) states.add(item.hcp_state)
+        if (item.hco_state) states.add(item.hco_state)
+        if (item.ref_hcp_state) states.add(item.ref_hcp_state)
+        if (item.ref_hco_state) states.add(item.ref_hco_state)
+
+        // Check if any of these states belong to the selected territories
+        for (const state of states) {
+          const territories = stateToTerritory[state] || []
+          if (territories.some((territory) => selectedTerritories.includes(territory))) {
+            return true
+          }
+        }
+
+        return false
+      })
     }
 
     setFilteredMapData(filtered)
   }, [mapData, selectedState, selectedYears, selectedTerritories])
+
+  // Get states that belong to selected territories
+  const statesInSelectedTerritories = useMemo(() => {
+    if (!selectedTerritories || selectedTerritories.length === 0) return new Set()
+
+    const stateSet = new Set()
+
+    // Add all states that belong to the selected territories
+    selectedTerritories.forEach((territory) => {
+      const states = territoryToStates[territory] || []
+      states.forEach((state) => stateSet.add(state))
+    })
+
+    return stateSet
+  }, [selectedTerritories])
 
   // Process data to get counts by state
   const { hcpStateCounts, hcoStateCounts, patientStateCounts, hcpZipData, hcoZipData, locationData } = useMemo(() => {
@@ -282,122 +339,151 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
     // Map for location data (lat/long)
     const locationMap = new Map() // Map of state -> Array of location objects
 
-    // Process each record
+    // Process each record using UNION logic
     filteredMapData.forEach((record) => {
-      const hcpId = record.hcp_id
-      const hcoId = record.hco_mdm
-      const patientId = record.patient_id
-      const hcpState = record.hcp_state
-      const hcoState = record.hco_state
-      const hcpZip = record.hcp_zip
-      const hcoZip = record.hco_postal_cd_prim
-      const hcoGrouping = record.hco_grouping
-
-      // Use a more robust fallback chain for HCO name
-      const hcoName = record.hco_mdm_name || record.hco_name || "Healthcare Organization"
-
-      // Ensure lat/long are valid numbers
-      const hcoLat = typeof record.rend_hco_lat === "number" && !isNaN(record.rend_hco_lat) ? record.rend_hco_lat : null
-      const hcoLong =
-        typeof record.rend_hco_long === "number" && !isNaN(record.rend_hco_long) ? record.rend_hco_long : null
-
-      // Process HCP data
-      if (hcpId && hcpState && hcpId !== "-" && hcpState !== "-") {
+      // Process rendering HCP data
+      if (record.hcp_id && record.hcp_state && record.hcp_id !== "-" && record.hcp_state !== "-") {
         // State level counts
-        if (!hcpStateMap.has(hcpState)) {
-          hcpStateMap.set(hcpState, new Set())
+        if (!hcpStateMap.has(record.hcp_state)) {
+          hcpStateMap.set(record.hcp_state, new Set())
         }
-        hcpStateMap.get(hcpState).add(hcpId)
+        hcpStateMap.get(record.hcp_state).add(record.hcp_id)
 
         // Add patient to state count
-        if (patientId && patientId !== "-") {
-          if (!patientStateMap.has(hcpState)) {
-            patientStateMap.set(hcpState, new Set())
+        if (record.patient_id && record.patient_id !== "-") {
+          if (!patientStateMap.has(record.hcp_state)) {
+            patientStateMap.set(record.hcp_state, new Set())
           }
-          patientStateMap.get(hcpState).add(patientId)
+          patientStateMap.get(record.hcp_state).add(record.patient_id)
         }
 
         // ZIP level counts
-        if (hcpZip && hcpZip !== "-") {
-          const zipKey = `${hcpState}-${hcpZip}`
+        if (record.hcp_zip && record.hcp_zip !== "-") {
+          const zipKey = `${record.hcp_state}-${record.hcp_zip}`
           if (!hcpZipMap.has(zipKey)) {
             hcpZipMap.set(zipKey, {
-              state: hcpState,
-              zip: hcpZip,
+              state: record.hcp_state,
+              zip: record.hcp_zip,
               hcps: new Set(),
               patients: new Set(),
             })
           }
-          hcpZipMap.get(zipKey).hcps.add(hcpId)
-          if (patientId && patientId !== "-") {
-            hcpZipMap.get(zipKey).patients.add(patientId)
+          hcpZipMap.get(zipKey).hcps.add(record.hcp_id)
+          if (record.patient_id && record.patient_id !== "-") {
+            hcpZipMap.get(zipKey).patients.add(record.patient_id)
           }
         }
       }
 
-      // Process HCO data
-      if (hcoId && hcoState && hcoId !== "-" && hcoState !== "-") {
+      // Process referring HCP data
+      if (record.ref_npi && record.ref_hcp_state && record.ref_npi !== "-" && record.ref_hcp_state !== "-") {
         // State level counts
-        if (!hcoStateMap.has(hcoState)) {
-          hcoStateMap.set(hcoState, new Set())
+        if (!hcpStateMap.has(record.ref_hcp_state)) {
+          hcpStateMap.set(record.ref_hcp_state, new Set())
         }
-        hcoStateMap.get(hcoState).add(hcoId)
+        hcpStateMap.get(record.ref_hcp_state).add(record.ref_npi)
+
+        // Add patient to state count
+        if (record.patient_id && record.patient_id !== "-") {
+          if (!patientStateMap.has(record.ref_hcp_state)) {
+            patientStateMap.set(record.ref_hcp_state, new Set())
+          }
+          patientStateMap.get(record.ref_hcp_state).add(record.patient_id)
+        }
+      }
+
+      // Process rendering HCO data
+      if (record.hco_mdm && record.hco_state && record.hco_mdm !== "-" && record.hco_state !== "-") {
+        // State level counts
+        if (!hcoStateMap.has(record.hco_state)) {
+          hcoStateMap.set(record.hco_state, new Set())
+        }
+        hcoStateMap.get(record.hco_state).add(record.hco_mdm)
 
         // ZIP level counts
-        if (hcoZip && hcoZip !== "-") {
-          const zipKey = `${hcoState}-${hcoZip}`
+        if (record.hco_postal_cd_prim && record.hco_postal_cd_prim !== "-") {
+          const zipKey = `${record.hco_state}-${record.hco_postal_cd_prim}`
           if (!hcoZipMap.has(zipKey)) {
             hcoZipMap.set(zipKey, {
-              state: hcoState,
-              zip: hcoZip,
+              state: record.hco_state,
+              zip: record.hco_postal_cd_prim,
               hcos: new Set(),
               patients: new Set(),
             })
           }
-          hcoZipMap.get(zipKey).hcos.add(hcoId)
-          if (patientId && patientId !== "-") {
-            hcoZipMap.get(zipKey).patients.add(patientId)
+          hcoZipMap.get(zipKey).hcos.add(record.hco_mdm)
+          if (record.patient_id && record.patient_id !== "-") {
+            hcoZipMap.get(zipKey).patients.add(record.patient_id)
           }
         }
 
         // Process location data if lat/long are available
+        const hcoLat =
+          typeof record.rend_hco_lat === "number" && !isNaN(record.rend_hco_lat) ? record.rend_hco_lat : null
+        const hcoLong =
+          typeof record.rend_hco_long === "number" && !isNaN(record.rend_hco_long) ? record.rend_hco_long : null
+        const hcoName = record.hco_mdm_name || record.hco_name || "Healthcare Organization"
+        const hcoGrouping = record.hco_grouping || "Unspecified"
+
         if (hcoLat !== null && hcoLong !== null) {
-          if (!locationMap.has(hcoState)) {
-            locationMap.set(hcoState, [])
+          if (!locationMap.has(record.hco_state)) {
+            locationMap.set(record.hco_state, [])
           }
 
           // Check if this HCO is already in the location array
-          const existingLocation = locationMap.get(hcoState).find((loc) => loc.id === hcoId)
+          const existingLocation = locationMap.get(record.hco_state).find((loc) => loc.id === record.hco_mdm)
 
           if (existingLocation) {
             // Update existing location
-            if (patientId && patientId !== "-") {
-              existingLocation.patients.add(patientId)
+            if (record.patient_id && record.patient_id !== "-") {
+              existingLocation.patients.add(record.patient_id)
             }
-            if (hcpId && hcpId !== "-") {
-              existingLocation.hcps.add(hcpId)
+            if (record.hcp_id && record.hcp_id !== "-") {
+              existingLocation.hcps.add(record.hcp_id)
             }
             // Update name if we have a better one now
             if (hcoName && hcoName !== "Healthcare Organization") {
               existingLocation.name = hcoName
             }
             // Store the grouping information
-            if (hcoGrouping) {
+            if (hcoGrouping && hcoGrouping !== "Unspecified") {
               existingLocation.grouping = hcoGrouping
             }
           } else {
             // Add new location with the correct name and grouping
-            locationMap.get(hcoState).push({
-              id: hcoId,
+            locationMap.get(record.hco_state).push({
+              id: record.hco_mdm,
               name: hcoName,
               lat: hcoLat,
               lng: hcoLong,
-              zip: hcoZip,
-              grouping: hcoGrouping || "Unspecified",
-              patients: new Set(patientId && patientId !== "-" ? [patientId] : []),
-              hcps: new Set(hcpId && hcpId !== "-" ? [hcpId] : []),
+              zip: record.hco_postal_cd_prim,
+              grouping: hcoGrouping,
+              patients: new Set(record.patient_id && record.patient_id !== "-" ? [record.patient_id] : []),
+              hcps: new Set(record.hcp_id && record.hcp_id !== "-" ? [record.hcp_id] : []),
             })
           }
+        }
+      }
+
+      // Process referring HCO data
+      if (
+        record.ref_hco_npi_mdm &&
+        record.ref_hco_state &&
+        record.ref_hco_npi_mdm !== "-" &&
+        record.ref_hco_state !== "-"
+      ) {
+        // State level counts
+        if (!hcoStateMap.has(record.ref_hco_state)) {
+          hcoStateMap.set(record.ref_hco_state, new Set())
+        }
+        hcoStateMap.get(record.ref_hco_state).add(record.ref_hco_npi_mdm)
+
+        // Add patient to state count
+        if (record.patient_id && record.patient_id !== "-") {
+          if (!patientStateMap.has(record.ref_hco_state)) {
+            patientStateMap.set(record.ref_hco_state, new Set())
+          }
+          patientStateMap.get(record.ref_hco_state).add(record.patient_id)
         }
       }
     })
@@ -823,6 +909,20 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
                 const stateAbbr = stateNameToAbbreviation[stateName]
                 const patientCount = stateAbbr ? patientStateCounts[stateAbbr] || 0 : 0
 
+                // Check if territory filter is active
+                const hasTerritoryFilter = selectedTerritories && selectedTerritories.length > 0
+
+                // If territory filter is active and this state is not in selected territories
+                if (hasTerritoryFilter && !statesInSelectedTerritories.has(stateAbbr)) {
+                  return {
+                    fillColor: "#EEE", // Light gray for states not in selected territories
+                    weight: 1,
+                    opacity: 1,
+                    color: "white",
+                    fillOpacity: 0.3, // Lower opacity
+                  }
+                }
+
                 return {
                   fillColor: patientCount > 0 ? colorScale(patientCount) : "#EEE",
                   weight: 1,
@@ -934,7 +1034,16 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
     return () => {
       cleanupMap()
     }
-  }, [mapContainerId, colorScale, hcpStateCounts, hcoStateCounts, patientStateCounts, onStateSelect])
+  }, [
+    mapContainerId,
+    colorScale,
+    hcpStateCounts,
+    hcoStateCounts,
+    patientStateCounts,
+    onStateSelect,
+    selectedTerritories,
+    statesInSelectedTerritories,
+  ])
 
   // Add this CSS to the top of the file to ensure markers are visible
   useEffect(() => {
@@ -974,7 +1083,7 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
     }
   }, [])
 
-  // Update state styles when color scale changes
+  // Update state styles when color scale or territory selection changes
   useEffect(() => {
     if (!stateLayerRef.current || !geoJsonLoadedRef.current || !mapMountedRef.current) return
 
@@ -984,14 +1093,26 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
         const stateAbbr = stateNameToAbbreviation[stateName]
         const patientCount = stateAbbr ? patientStateCounts[stateAbbr] || 0 : 0
 
-        layer.setStyle({
-          fillColor: patientCount > 0 ? colorScale(patientCount) : "#EEE",
-        })
+        // Check if territory filter is active
+        const hasTerritoryFilter = selectedTerritories && selectedTerritories.length > 0
+
+        // If territory filter is active and this state is not in selected territories
+        if (hasTerritoryFilter && !statesInSelectedTerritories.has(stateAbbr)) {
+          layer.setStyle({
+            fillColor: "#EEE", // Light gray for states not in selected territories
+            fillOpacity: 0.3, // Lower opacity
+          })
+        } else {
+          layer.setStyle({
+            fillColor: patientCount > 0 ? colorScale(patientCount) : "#EEE",
+            fillOpacity: 0.7,
+          })
+        }
       })
     } catch (error) {
       console.error("Error updating state styles:", error)
     }
-  }, [colorScale, patientStateCounts])
+  }, [colorScale, patientStateCounts, selectedTerritories, statesInSelectedTerritories])
 
   // Update markers when selectedState or filters change
   useEffect(() => {

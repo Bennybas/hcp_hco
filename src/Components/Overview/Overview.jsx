@@ -164,13 +164,17 @@ const Overview = () => {
 
       // Extract unique territories from both rend_hco_territory and ref_hco_territory
       const territories = [
-        ...new Set([
-          ...jsonData.map((item) => item.rend_hco_territory),
-          ...jsonData.map((item) => item.ref_hco_territory),
-        ]),
-      ]
-        .filter((territory) => territory && territory !== "-" && territory !== null)
-        .sort() // Sort alphabetically
+        "MIDWEST",
+        "SOUTHEAST",
+        "ROCKY MOUNTAIN",
+        "CAPITOL",
+        "SOUTHWEST",
+        "TEXAS",
+        "UPPER MIDWEST",
+        "SOUTH CENTRAL",
+        "NEW ENGLAND",
+        "OHIO VALLEY",
+      ].sort() // Sort alphabetically
 
       setTerritoryOptions(territories)
 
@@ -186,188 +190,224 @@ const Overview = () => {
   }
 
   // Memoize the calculateMetrics function to prevent unnecessary recalculations
-  const calculateMetrics = useCallback((data, selectedState) => {
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn("Cannot calculate metrics: data is empty or invalid")
-      return
-    }
-
-    // For rendering HCPs, filter by hcp_state if a state is selected
-    const renderingHcps = data.filter((item) => !selectedState || item.hcp_state === selectedState)
-    const uniqueRendHCP = new Set(renderingHcps.map((item) => item.hcp_id).filter((id) => id && id !== "-"))
-
-    // For referring HCPs, filter by ref_hcp_state if a state is selected
-    const referringHcps = data.filter((item) => !selectedState || item.ref_hcp_state === selectedState)
-    const uniqueRefHCP = new Set(referringHcps.map((item) => item.ref_npi).filter((npi) => npi && npi !== "-"))
-
-    const uniqueHCPs = new Set([...uniqueRendHCP, ...uniqueRefHCP])
-
-    const relevantPatients = data.filter(
-      (item) => !selectedState || item.hcp_state === selectedState || item.ref_hcp_state === selectedState,
-    )
-    const uniquePatients = new Set(relevantPatients.map((item) => item.patient_id).filter((id) => id && id !== "-"))
-
-    // For rendering HCOs, filter by hco_state if a state is selected
-    const renderingHcos = data.filter((item) => !selectedState || item.hco_state === selectedState)
-    const uniqueRendHCO = new Set(renderingHcos.map((item) => item.hco_mdm).filter((id) => id && id !== "-"))
-
-    // For referring HCOs, filter by ref_hco_state if a state is selected
-    const referringHcos = data.filter((item) => !selectedState || item.ref_hco_state === selectedState)
-    const uniqueRefHCO = new Set(referringHcos.map((item) => item.ref_hco_npi_mdm).filter((npi) => npi && npi !== "-"))
-
-    // Combine both sets for total unique HCOs
-    const uniqueHCOs = new Set([...uniqueRendHCO, ...uniqueRefHCO])
-
-    const zolgensmaHcos = data.filter(
-      (item) => item.zolg_prescriber === "Yes" && (!selectedState || item.hco_state === selectedState),
-    )
-    const zolgemsmaHCOs = new Set(zolgensmaHcos.map((item) => item.hco_mdm))
-    const zolgemsmaHCOCount = zolgemsmaHCOs.size
-
-    // Calculate patient counts per HCP
-    const hcpPatientMap = new Map()
-    const hcpIdToNameMap = new Map()
-    const hcpIdToSpecialityMap = new Map()
-    const hcpZOLMap = new Map()
-
-    renderingHcps.forEach((item) => {
-      if (item.hcp_id && item.hcp_id !== "-") {
-        if (!hcpPatientMap.has(item.hcp_id)) {
-          hcpPatientMap.set(item.hcp_id, new Set())
-          hcpIdToNameMap.set(item.hcp_id, item.hcp_name)
-
-          // Set specialty if available
-          if (item.final_spec && item.final_spec !== "-") {
-            hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
-          }
-          if (item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
-            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase())
-          }
-        } else {
-          // Fallback: Add specialty if missing
-          if (!hcpIdToSpecialityMap.has(item.hcp_id) && item.final_spec && item.final_spec !== "-") {
-            hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
-          }
-
-          // Optional: If KOL isn't already set and exists on this item
-          if (!hcpZOLMap.has(item.hcp_id) && item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
-            hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toLowerCase())
-          }
-        }
-
-        // Add patient ID
-        if (item.patient_id && item.patient_id !== "-") {
-          hcpPatientMap.get(item.hcp_id).add(item.patient_id)
-        }
+  const calculateMetrics = useCallback(
+    (data, selectedState) => {
+      if (!Array.isArray(data) || data.length === 0) {
+        console.warn("Cannot calculate metrics: data is empty or invalid")
+        return
       }
-    })
 
-    // Calculate patient counts per HCO
-    const hcoPatientMap = new Map()
-    const hcoIdToNameMap = new Map()
-    const hcoIdToGroupingMap = new Map()
+      // Create a Set of selected territories for faster lookups
+      const selectedTerritoriesSet = new Set(selectedTerritories)
+      const hasSelectedTerritories = selectedTerritories && selectedTerritories.length > 0
 
-    // Process rendering HCOs with state filter
-    renderingHcos.forEach((item) => {
-      if (item.hco_mdm && item.hco_mdm !== "-") {
-        if (!hcoPatientMap.has(item.hco_mdm)) {
-          hcoPatientMap.set(item.hco_mdm, new Set())
-          hcoIdToNameMap.set(item.hco_mdm, item.hco_mdm_name)
-          // Initialize with the grouping from the first occurrence
-          if (item.hco_grouping && item.hco_grouping !== "-") {
+      // For rendering HCPs, filter by hcp_state if a state is selected
+      // AND by rend_hco_territory if territories are selected
+      const renderingHcps = data.filter(
+        (item) =>
+          (!selectedState || item.hcp_state === selectedState) &&
+          (!hasSelectedTerritories || (item.rend_hco_territory && selectedTerritoriesSet.has(item.rend_hco_territory))),
+      )
+      const uniqueRendHCP = new Set(renderingHcps.map((item) => item.hcp_id).filter((id) => id && id !== "-"))
+
+      // For referring HCPs, filter by ref_hcp_state if a state is selected
+      // AND by ref_hco_territory if territories are selected
+      const referringHcps = data.filter(
+        (item) =>
+          (!selectedState || item.ref_hcp_state === selectedState) &&
+          (!hasSelectedTerritories || (item.ref_hco_territory && selectedTerritoriesSet.has(item.ref_hco_territory))),
+      )
+      const uniqueRefHCP = new Set(referringHcps.map((item) => item.ref_npi).filter((npi) => npi && npi !== "-"))
+
+      const uniqueHCPs = new Set([...uniqueRendHCP, ...uniqueRefHCP])
+
+      const relevantPatients = data.filter(
+        (item) =>
+          (!selectedState || item.hcp_state === selectedState || item.ref_hcp_state === selectedState) &&
+          (!hasSelectedTerritories ||
+            (item.rend_hco_territory && selectedTerritoriesSet.has(item.rend_hco_territory)) ||
+            (item.ref_hco_territory && selectedTerritoriesSet.has(item.ref_hco_territory))),
+      )
+      const uniquePatients = new Set(relevantPatients.map((item) => item.patient_id).filter((id) => id && id !== "-"))
+
+      // For rendering HCOs, filter by hco_state if a state is selected
+      // AND by rend_hco_territory if territories are selected
+      const renderingHcos = data.filter(
+        (item) =>
+          (!selectedState || item.hco_state === selectedState) &&
+          (!hasSelectedTerritories || (item.rend_hco_territory && selectedTerritoriesSet.has(item.rend_hco_territory))),
+      )
+      const uniqueRendHCO = new Set(renderingHcos.map((item) => item.hco_mdm).filter((id) => id && id !== "-"))
+
+      // For referring HCOs, filter by ref_hco_state if a state is selected
+      // AND by ref_hco_territory if territories are selected
+      const referringHcos = data.filter(
+        (item) =>
+          (!selectedState || item.ref_hco_state === selectedState) &&
+          (!hasSelectedTerritories || (item.ref_hco_territory && selectedTerritoriesSet.has(item.ref_hco_territory))),
+      )
+      const uniqueRefHCO = new Set(
+        referringHcos.map((item) => item.ref_hco_npi_mdm).filter((npi) => npi && npi !== "-"),
+      )
+
+      // Combine both sets for total unique HCOs
+      const uniqueHCOs = new Set([...uniqueRendHCO, ...uniqueRefHCO])
+
+      const zolgensmaHcos = data.filter(
+        (item) =>
+          item.zolg_prescriber === "Yes" &&
+          (!selectedState || item.hco_state === selectedState) &&
+          (!hasSelectedTerritories || (item.rend_hco_territory && selectedTerritoriesSet.has(item.rend_hco_territory))),
+      )
+      const zolgemsmaHCOs = new Set(zolgensmaHcos.map((item) => item.hco_mdm))
+      const zolgemsmaHCOCount = zolgemsmaHCOs.size
+
+      // Calculate patient counts per HCP
+      const hcpPatientMap = new Map()
+      const hcpIdToNameMap = new Map()
+      const hcpIdToSpecialityMap = new Map()
+      const hcpZOLMap = new Map()
+
+      renderingHcps.forEach((item) => {
+        if (item.hcp_id && item.hcp_id !== "-") {
+          if (!hcpPatientMap.has(item.hcp_id)) {
+            hcpPatientMap.set(item.hcp_id, new Set())
+            hcpIdToNameMap.set(item.hcp_id, item.hcp_name)
+
+            // Set specialty if available
+            if (item.final_spec && item.final_spec !== "-") {
+              hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
+            }
+            if (item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
+              hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase())
+            }
+          } else {
+            // Fallback: Add specialty if missing
+            if (!hcpIdToSpecialityMap.has(item.hcp_id) && item.final_spec && item.final_spec !== "-") {
+              hcpIdToSpecialityMap.set(item.hcp_id, item.final_spec)
+            }
+
+            // Optional: If KOL isn't already set and exists on this item
+            if (!hcpZOLMap.has(item.hcp_id) && item.zolgensma_iv_target && item.zolgensma_iv_target !== "-") {
+              hcpZOLMap.set(item.hcp_id, item.zolgensma_iv_target.toUpperCase())
+            }
+          }
+
+          // Add patient ID
+          if (item.patient_id && item.patient_id !== "-") {
+            hcpPatientMap.get(item.hcp_id).add(item.patient_id)
+          }
+        }
+      })
+
+      // Calculate patient counts per HCO
+      const hcoPatientMap = new Map()
+      const hcoIdToNameMap = new Map()
+      const hcoIdToGroupingMap = new Map()
+
+      // Process rendering HCOs with state filter
+      renderingHcos.forEach((item) => {
+        if (item.hco_mdm && item.hco_mdm !== "-") {
+          if (!hcoPatientMap.has(item.hco_mdm)) {
+            hcoPatientMap.set(item.hco_mdm, new Set())
+            hcoIdToNameMap.set(item.hco_mdm, item.hco_mdm_name)
+            // Initialize with the grouping from the first occurrence
+            if (item.hco_grouping && item.hco_grouping !== "-") {
+              hcoIdToGroupingMap.set(item.hco_mdm, item.hco_grouping)
+            }
+          } else if (!hcoIdToGroupingMap.has(item.hco_mdm) && item.hco_grouping && item.hco_grouping !== "-") {
+            // If we already have this HCO but no grouping yet, add it
             hcoIdToGroupingMap.set(item.hco_mdm, item.hco_grouping)
           }
-        } else if (!hcoIdToGroupingMap.has(item.hco_mdm) && item.hco_grouping && item.hco_grouping !== "-") {
-          // If we already have this HCO but no grouping yet, add it
-          hcoIdToGroupingMap.set(item.hco_mdm, item.hco_grouping)
+
+          if (item.patient_id && item.patient_id !== "-") {
+            hcoPatientMap.get(item.hco_mdm).add(item.patient_id)
+          }
         }
+      })
 
-        if (item.patient_id && item.patient_id !== "-") {
-          hcoPatientMap.get(item.hco_mdm).add(item.patient_id)
+      // Get referring HCPs and HCOs with state filters
+      const referringHCPsSet = new Set()
+      const referringHCOsSet = new Set()
+
+      referringHcps.forEach((item) => {
+        if (item.ref_npi && item.ref_npi !== "-") {
+          referringHCPsSet.add(item.ref_npi)
         }
-      }
-    })
+      })
 
-    // Get referring HCPs and HCOs with state filters
-    const referringHCPsSet = new Set()
-    const referringHCOsSet = new Set()
+      referringHcos.forEach((item) => {
+        if (item.ref_hco_npi_mdm && item.ref_hco_npi_mdm !== "-") {
+          referringHCOsSet.add(item.ref_hco_npi_mdm)
+        }
+      })
 
-    referringHcps.forEach((item) => {
-      if (item.ref_npi && item.ref_npi !== "-") {
-        referringHCPsSet.add(item.ref_npi)
-      }
-    })
+      // Calculate average patients per HCP
+      const patientCountsPerHCP = Array.from(hcpPatientMap.values()).map((patientSet) => patientSet.size)
 
-    referringHcos.forEach((item) => {
-      if (item.ref_hco_npi_mdm && item.ref_hco_npi_mdm !== "-") {
-        referringHCOsSet.add(item.ref_hco_npi_mdm)
-      }
-    })
+      const avgPatientsPerHCP =
+        patientCountsPerHCP.length > 0
+          ? patientCountsPerHCP.reduce((sum, count) => sum + count, 0) / patientCountsPerHCP.length
+          : 0
 
-    // Calculate average patients per HCP
-    const patientCountsPerHCP = Array.from(hcpPatientMap.values()).map((patientSet) => patientSet.size)
+      const patientCountsPerHCO = Array.from(hcoPatientMap.values()).map((patientSet) => patientSet.size)
 
-    const avgPatientsPerHCP =
-      patientCountsPerHCP.length > 0
-        ? patientCountsPerHCP.reduce((sum, count) => sum + count, 0) / patientCountsPerHCP.length
-        : 0
+      const avgPatientsPerHCO =
+        patientCountsPerHCO.length > 0
+          ? patientCountsPerHCO.reduce((sum, count) => sum + count, 0) / patientCountsPerHCO.length
+          : 0
 
-    const patientCountsPerHCO = Array.from(hcoPatientMap.values()).map((patientSet) => patientSet.size)
+      const hcpVolume = Array.from(hcpPatientMap.entries()).map(([hcpId, patients]) => {
+        return {
+          id: hcpId,
+          name: hcpIdToNameMap.get(hcpId) || `HCP ${hcpId}`,
+          volume: patients.size,
+          speciality: hcpIdToSpecialityMap.get(hcpId) || "Unknown",
+          kol: hcpZOLMap.get(hcpId),
+        }
+      })
 
-    const avgPatientsPerHCO =
-      patientCountsPerHCO.length > 0
-        ? patientCountsPerHCO.reduce((sum, count) => sum + count, 0) / patientCountsPerHCO.length
-        : 0
+      const topHCPs = hcpVolume.sort((a, b) => b.volume - a.volume).slice(0, 10)
 
-    const hcpVolume = Array.from(hcpPatientMap.entries()).map(([hcpId, patients]) => {
-      return {
-        id: hcpId,
-        name: hcpIdToNameMap.get(hcpId) || `HCP ${hcpId}`,
-        volume: patients.size,
-        speciality: hcpIdToSpecialityMap.get(hcpId) || "Unknown",
-        kol: hcpZOLMap.get(hcpId),
-      }
-    })
+      // Calculate Top HCOs by patient volume - with HCO IDs and grouping
+      const hcoVolume = Array.from(hcoPatientMap.entries()).map(([hcoId, patients]) => {
+        const hcoName = hcoIdToNameMap.get(hcoId) || "Unknown"
+        return {
+          id: hcoId,
+          name: hcoName !== "-" ? hcoName : "Unknown",
+          volume: patients.size,
+          grouping: hcoIdToGroupingMap.get(hcoId) || "Unspecified",
+        }
+      })
 
-    const topHCPs = hcpVolume.sort((a, b) => b.volume - a.volume).slice(0, 10)
+      // Filter out "Unknown" HCOs and then take top 10
+      const topHCOs = hcoVolume
+        .filter((hco) => hco.name !== "Unknown")
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 10)
 
-    // Calculate Top HCOs by patient volume - with HCO I
-    const hcoVolume = Array.from(hcoPatientMap.entries()).map(([hcoId, patients]) => {
-      const hcoName = hcoIdToNameMap.get(hcoId) || "Unknown"
-      return {
-        id: hcoId,
-        name: hcoName !== "-" ? hcoName : "Unknown",
-        volume: patients.size,
-        grouping: hcoIdToGroupingMap.get(hcoId) || "Unspecified",
-      }
-    })
-
-    // Filter out "Unknown" HCOs and then take top 10
-    const topHCOs = hcoVolume
-      .filter((hco) => hco.name !== "Unknown")
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 10)
-
-    // Set metrics
-    setMetrics({
-      totalHCPs: uniqueHCPs.size,
-      totalPatients: uniquePatients.size,
-      avgTreatingHCPs: uniqueRendHCP.size,
-      avgPatientsPerHCP: Math.round(avgPatientsPerHCP * 10) / 10,
-      hcpsReferringPatients: uniqueRefHCP.size,
-      avgPatientsReferredPerHCP:
-        Math.round((uniqueRefHCP.size > 0 ? uniquePatients.size / uniqueRefHCP.size : 0) * 10) / 10,
-      totalHCOs: uniqueHCOs.size,
-      zolgemsmaEver: zolgemsmaHCOCount,
-      avgTreatingHCOs: uniqueRendHCO.size,
-      avgPatientsPerHCO: Math.round(avgPatientsPerHCO * 10) / 10,
-      hcosReferringPatients: referringHCOsSet.size,
-      avgPatientsReferredPerHCO:
-        Math.round((referringHCOsSet.size > 0 ? uniquePatients.size / referringHCOsSet.size : 0) * 10) / 10,
-      topHCPs,
-      topHCOs,
-    })
-  }, [])
+      // Set metrics
+      setMetrics({
+        totalHCPs: uniqueHCPs.size,
+        totalPatients: uniquePatients.size,
+        avgTreatingHCPs: uniqueRendHCP.size,
+        avgPatientsPerHCP: Math.round(avgPatientsPerHCP * 10) / 10,
+        hcpsReferringPatients: uniqueRefHCP.size,
+        avgPatientsReferredPerHCP:
+          Math.round((uniqueRefHCP.size > 0 ? uniquePatients.size / uniqueRefHCP.size : 0) * 10) / 10,
+        totalHCOs: uniqueHCOs.size,
+        zolgemsmaEver: zolgemsmaHCOCount,
+        avgTreatingHCOs: uniqueRendHCO.size,
+        avgPatientsPerHCO: Math.round(avgPatientsPerHCO * 10) / 10,
+        hcosReferringPatients: referringHCOsSet.size,
+        avgPatientsReferredPerHCO:
+          Math.round((referringHCOsSet.size > 0 ? uniquePatients.size / referringHCOsSet.size : 0) * 10) / 10,
+        topHCPs,
+        topHCOs,
+      })
+    },
+    [selectedTerritories],
+  )
 
   // Handle state selection from the map
   const handleStateSelect = (stateAbbr) => {
@@ -454,7 +494,7 @@ const Overview = () => {
           <div className="relative">
             <div
               className={`flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px] ${
-                selectedYears.length > 0 ? "border-b-[#0460A9] border-x-[#0460A9]  border" : ""
+                selectedYears.length > 0 ? "border-x-[#0460A9] border-b-[#0460A9]  border" : ""
               }`}
               onClick={() => setShowYearDropdown(!showYearDropdown)}
             >
@@ -497,7 +537,7 @@ const Overview = () => {
           <div className="relative">
             <div
               className={`flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px] ${
-                selectedTerritories.length > 0 ? "border-b-[#0460A9] border-x-[#0460A9]  border" : ""
+                selectedTerritories.length > 0 ? "border-x-[#0460A9] border-b-[#0460A9]  border" : ""
               }`}
               onClick={() => setShowTerritoryDropdown(!showTerritoryDropdown)}
             >
