@@ -534,15 +534,19 @@ const HCPdeepDive = () => {
 
       // Add name labels ABOVE the node
       nodeGroups
-        .append("text")
-        .attr("x", (d) => (d.level === 0 ? -35 : d.level === 2 ? 20 : 0))
-        .attr("y", (d) => (d.level === 1 ? -25 : d.level === 0 ? -10 : 0))
-        .attr("text-anchor", (d) => (d.level === 0 ? "end" : d.level === 2 ? "start" : "middle"))
-        .attr("font-size", "11px")
-        .attr("font-weight", "500")
-        .attr("fill", "#333")
-        .attr("dy", ".35em")
-        .text((d) => d.name)
+      .append("text")
+      .attr("x", (d) => (d.level === 0 ? -35 : d.level === 2 ? 20 : 0))
+      .attr("y", (d) => (d.level === 1 ? -25 : d.level === 0 ? -10 : 0))
+      .attr("text-anchor", (d) => (d.level === 0 ? "end" : d.level === 2 ? "start" : "middle"))
+      .attr("font-size", "11px")
+      .attr("font-weight", "500")
+      .attr("fill", "#333")
+      .attr("dy", ".35em")
+      .text((d) => {
+        const hasSpecialty = d.specialty && d.specialty !== "-";
+        return hasSpecialty ? `${d.name} (${d.specialty})` : d.name;
+      });
+    
 
       // Add patient count INSIDE the node for referred HCPs
       nodeGroups
@@ -558,16 +562,16 @@ const HCPdeepDive = () => {
         .text((d) => d.patients)
 
       // Add specialty labels BELOW the node
-      nodeGroups
-        .filter((d) => d.type === "referred")
-        .append("text")
-        .attr("x", 0)
-        .attr("y", 25)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "9px")
-        .attr("fill", "#555")
-        .attr("dy", ".35em")
-        .text((d) => d.specialty)
+      // nodeGroups
+      //   .filter((d) => d.type === "referred")
+      //   .append("text")
+      //   .attr("x", 0)
+      //   .attr("y", 25)
+      //   .attr("text-anchor", "middle")
+      //   .attr("font-size", "9px")
+      //   .attr("fill", "#555")
+      //   .attr("dy", ".35em")
+      //   .text((d) => d.specialty)
 
       // Add zoom instructions
       svg

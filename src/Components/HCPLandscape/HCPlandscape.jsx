@@ -1,12 +1,10 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Legend } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
-import { PropagateLoader } from "react-spinners";
+import { PropagateLoader } from "react-spinners"
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -204,7 +202,15 @@ const HCPlandscape = () => {
   const extractFilterOptions = (data) => {
     // Extract unique brands and age groups
     const brands = [...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
-    const ages = [...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
+    const ages = [...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))].sort((a, b) => {
+      // CHANGE #2: Sort age groups in ascending order: "0 to 2", "3 to 17", "Above 18"
+      const ageOrder = {
+        "0 to 2": 1,
+        "3 to 17": 2,
+        "Above 18": 3,
+      }
+      return ageOrder[a] - ageOrder[b]
+    })
 
     // Get years but filter out 2016 and 2025
     const years = [...new Set(data.map((item) => item.year))]
@@ -600,6 +606,7 @@ const HCPlandscape = () => {
     // Get unique HCPs and count their patients
     const uniqueHcps = {}
     const hcpPatientCounts = {}
+    const hcpZolgensmaNaveCounts = {} // CHANGE #1: Add tracking for Zolgensma Naive patients
 
     data.forEach((item) => {
       if (item.rend_npi && item.rend_npi !== "-") {
@@ -612,20 +619,28 @@ const HCPlandscape = () => {
             "Affiliated Accounts": item.hco_mdm_name,
             "HCP Segment": item.hcp_segment,
             State: item.hcp_state || "-", // Add state information
+            "Zolgensma Naive": 0, // CHANGE #1: Initialize Zolgensma Naive count
           }
           hcpPatientCounts[item.rend_npi] = new Set()
+          hcpZolgensmaNaveCounts[item.rend_npi] = new Set() // CHANGE #1: Initialize set for tracking unique patients
         }
 
         // Add patient to count if it exists
         if (item.patient_id && item.patient_id !== "-") {
           hcpPatientCounts[item.rend_npi].add(item.patient_id)
+
+          // CHANGE #1: Track Zolgensma Naive patients
+          if (item.zolgensma_naive === "YES" && item.patient_id) {
+            hcpZolgensmaNaveCounts[item.rend_npi].add(item.patient_id)
+          }
         }
       }
     })
 
-    // Add patient count to each HCP
+    // Add patient count and Zolgensma Naive count to each HCP
     Object.keys(uniqueHcps).forEach((hcpId) => {
       uniqueHcps[hcpId]["Patient Count"] = hcpPatientCounts[hcpId].size
+      uniqueHcps[hcpId]["Zolgensma Naive"] = hcpZolgensmaNaveCounts[hcpId].size // CHANGE #1: Add Zolgensma Naive count
     })
 
     // Convert to array and add rank
@@ -900,7 +915,7 @@ const HCPlandscape = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-          <PropagateLoader color="#0460A9" size={10} />
+        <PropagateLoader color="#0460A9" size={10} />
       </div>
     )
   }
@@ -1576,37 +1591,40 @@ const HCPlandscape = () => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-blue-200 text-gray-700 text-[11px] font-medium">
-                <th className="p-2 text-left">Rank</th>
-                <th className="p-2 text-left">HCP ID</th>
-                <th className="p-2 text-left">HCP Name</th>
-                <th className="p-2 text-left">Specialty</th>
-                <th className="p-2 text-left">State</th>
-                <th className="p-2 text-left">HCP Segment</th>
-                <th className="p-2 text-right">Patient Count</th>
-                <th className="p-2 text-left">Affiliated Accounts</th>
+                <th className="p-2 text-center">Rank</th>
+                <th className="p-2 text-center">HCP ID</th>
+                <th className="p-2 text-center">HCP Name</th>
+                <th className="p-2 text-center">Specialty</th>
+                <th className="p-2 text-center">State</th>
+                <th className="p-2 text-center">HCP Segment</th>
+                <th className="p-2 text-center">Affiliated Accounts</th>
+                <th className="p-2 text-center">Patient Count</th>
+                <th className="p-2 text-center">Zolgensma Naive</th>
               </tr>
             </thead>
 
             <tbody>
               {table_data.map((hcp, index) => (
                 <tr key={index} className="border-t text-gray-800 text-[10px]">
-                  <td className="p-2">{hcp.Rank}</td>
-                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
+                  <td className="p-2 text-center">{hcp.Rank}</td>
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer text-center">
                     {hcp["HCP ID"]}
                   </td>
-                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer">
+                  <td onClick={() => getHCPDetails(hcp["HCP Name"])} className="p-2 cursor-pointer text-center">
                     {hcp["HCP Name"]}
                   </td>
-                  <td className="p-2">{hcp.Specialty}</td>
-                  <td className="p-2">{hcp.State}</td>
-                  <td className="p-2">{hcp["HCP Segment"]}</td>
-                  <td className="p-2 text-right">{hcp["Patient Count"]}</td>
-                  <td className="p-2">{hcp["Affiliated Accounts"]}</td>
+                  <td className="p-2 text-center">{hcp.Specialty}</td>
+                  <td className="p-2 text-center">{hcp.State}</td>
+                  <td className="p-2 text-center">{hcp["HCP Segment"]}</td>
+                  <td className="p-2 text-center">{hcp["Affiliated Accounts"]}</td>
+                  <td className="p-2 text-center">{hcp["Patient Count"]}</td>
+                  <td className="p-2 text-center">{hcp["Zolgensma Naive"]}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
 
         {/* Pagination with 5 visible pages */}
         {totalPages > 1 && (

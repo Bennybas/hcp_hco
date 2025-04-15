@@ -1,12 +1,10 @@
-"use client"
-
 import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, ChevronRight, ChevronLeft, X, Check } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
-import { PropagateLoader } from "react-spinners";
+import { PropagateLoader } from "react-spinners"
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -137,7 +135,20 @@ const AccountLandscape = () => {
 
   const extractFilterOptions = (data) => {
     // Extract unique age groups
-    const ages = ["All", ...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))]
+    const ages = [
+      "All",
+      ...[...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))].sort(
+        (a, b) => {
+          const ageOrder = {
+            "0 to 2": 1,
+            "3 to 17": 2,
+            "Above 18": 3,
+          };
+          return ageOrder[a] - ageOrder[b];
+        }
+      ),
+    ];
+    
 
     // Extract unique brands (drug names)
     const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
@@ -255,7 +266,7 @@ const AccountLandscape = () => {
         const specialtyMapping = {
           "Child Neurology": "CHILD NEUROLOGY",
           Neurology: "NEUROLOGY",
-          Neuromuscular: "NEUROMUSCULAR",
+          Neuromuscular: "NEUROMSUCULAR",
           Pediatric: "PEDIATRIC",
           Radiology: "RADIOLOGY",
           "NP/PA": "NP/PA",
@@ -784,6 +795,7 @@ const AccountLandscape = () => {
             accountId: hcoId,
             hcps: new Set(),
             patients: new Set(),
+            zolgNaivePatients: new Set(), // Add tracking for Zolgensma Naive patients
             affiliatedAccount: item.hco_mdm_name || "-",
             tier: item.hco_mdm_tier || "-",
             archetype: item.hco_grouping || "-",
@@ -792,13 +804,18 @@ const AccountLandscape = () => {
         }
 
         const account = accountsMap.get(hcoId)
-        // Add HCP if it exists
+        // Add HCP if it exists - using hcp_id instead of previous field
         if (item.hcp_id && item.hcp_id !== "-") {
           account.hcps.add(item.hcp_id)
         }
         // Add patient if it exists
         if (item.patient_id && item.patient_id !== "-") {
           account.patients.add(item.patient_id)
+
+          // Track Zolgensma Naive patients
+          if (item.zolgensma_naive === "YES") {
+            account.zolgNaivePatients.add(item.patient_id)
+          }
         }
       }
     })
@@ -808,6 +825,7 @@ const AccountLandscape = () => {
       ...account,
       hcps: account.hcps.size,
       patients: account.patients.size,
+      zolgNaivePatients: account.zolgNaivePatients.size,
     }))
 
     // Sort by patient count in descending order
@@ -819,6 +837,7 @@ const AccountLandscape = () => {
       "Account ID": account.accountId,
       "No. HCPs": account.hcps,
       "SMA. Patients": account.patients,
+      "Zolgensma Naive": account.zolgNaivePatients,
       "Affiliated Account": account.affiliatedAccount,
       "Account Tier": account.tier,
       "Account Archetype": account.archetype,
@@ -870,9 +889,9 @@ const AccountLandscape = () => {
     setCurrentPage(1)
 
     // Close dropdown after selection
-    // if (filterName !== "years") {
-    //   setOpenDropdown(null)
-    // }
+    if (filterName !== "years") {
+      setOpenDropdown(null)
+    }
   }
 
   // Toggle filter buttons
@@ -1076,9 +1095,9 @@ const AccountLandscape = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-          <PropagateLoader color="#0460A9" size={10} />
+        <PropagateLoader color="#0460A9" size={10} />
       </div>
-      )
+    )
   }
 
   return (
@@ -1806,10 +1825,12 @@ const AccountLandscape = () => {
                 <th className="p-2 text-left">Rank</th>
                 <th className="p-2 text-left">Account ID</th>
                 <th className="p-2 text-left">No. HCPs</th>
-                <th className="p-2 text-left">SMA. Patients</th>
+                
                 <th className="p-2 text-left">Affiliated Accounts</th>
                 {/* <th className="p-2 text-left">Account Tier</th> */}
                 <th className="p-2 text-left">Account Grouping</th>
+                <th className="p-2 text-left">SMA. Patients</th>
+                <th className="p-2 text-left">Zolgensma Naive</th>
               </tr>
             </thead>
 
@@ -1821,12 +1842,14 @@ const AccountLandscape = () => {
                     {hco["Account ID"]}
                   </td>
                   <td className="p-2">{hco["No. HCPs"]}</td>
-                  <td className="p-2">{hco["SMA. Patients"]}</td>
+                  
                   <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">
                     {hco["Affiliated Account"]}
                   </td>
                   {/* <td className="p-2">{hco["Account Tier"]}</td> */}
                   <td className="p-2">{hco["Account Archetype"]}</td>
+                  <td className="p-2">{hco["SMA. Patients"]}</td>
+                  <td className="p-2">{hco["Zolgensma Naive"]}</td>
                 </tr>
               ))}
             </tbody>

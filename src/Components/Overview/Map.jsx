@@ -176,7 +176,14 @@ const groupingColors = {
   Unspecified: "#CCCCCC", // Light gray for unspecified/missing values
 }
 
-const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], selectedYears = [] }) => {
+const USAMap = ({
+  onStateSelect,
+  selectedState,
+  selectedTerritories = [],
+  selectedYears = [],
+  selectedHcpSegment = null,
+  selectedHcoGrouping = null,
+}) => {
   const navigate = useNavigate()
   const [mapData, setMapData] = useState([])
   const [filteredMapData, setFilteredMapData] = useState([])
@@ -307,8 +314,31 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
       })
     }
 
+    // Apply HCP segment filter
+    if (selectedHcpSegment) {
+      filtered = filtered.filter((item) => {
+        const segment = item.hcp_segment ? item.hcp_segment.toUpperCase() : ""
+        if (selectedHcpSegment === "HIGH") return segment === "HIGH"
+        if (selectedHcpSegment === "MEDIUM") return ["MODERATE", "MEDIUM", "MED"].includes(segment)
+        if (selectedHcpSegment === "LOW") return segment === "LOW"
+        if (selectedHcpSegment === "V-LOW") return ["VERY LOW", "V. LOW", "V.LOW", "V-LOW"].includes(segment)
+        return false
+      })
+    }
+
+    // Apply HCO grouping filter
+    if (selectedHcoGrouping) {
+      filtered = filtered.filter((item) => {
+        const grouping = item.hco_grouping ? item.hco_grouping.replace(/-/g, "").trim().toUpperCase() : ""
+        return (
+          grouping === selectedHcoGrouping ||
+          (selectedHcoGrouping === "UNSPECIFIED" && (grouping === "DELETE" || grouping === ""))
+        )
+      })
+    }
+
     setFilteredMapData(filtered)
-  }, [mapData, selectedState, selectedYears, selectedTerritories])
+  }, [mapData, selectedState, selectedYears, selectedTerritories, selectedHcpSegment, selectedHcoGrouping])
 
   // Get states that belong to selected territories
   const statesInSelectedTerritories = useMemo(() => {
@@ -1137,7 +1167,7 @@ const USAMap = ({ onStateSelect, selectedState, selectedTerritories = [], select
     } catch (error) {
       console.error("Error updating markers on state or filter change:", error)
     }
-  }, [selectedState, filteredMapData])
+  }, [selectedState, filteredMapData, selectedHcpSegment, selectedHcoGrouping])
 
   // Handle window resize
   useEffect(() => {

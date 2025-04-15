@@ -704,6 +704,8 @@ const Overview = () => {
             selectedState={selectedState}
             selectedTerritories={selectedTerritories}
             selectedYears={selectedYears}
+            selectedHcpSegment={selectedHcpSegment}
+            selectedHcoGrouping={selectedHcoGrouping}
           />
         </div>
 
