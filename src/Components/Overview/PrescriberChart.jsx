@@ -5,36 +5,35 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 
 const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) => {
   const formatSegmentName = (segment) => {
-    if (!segment) return ""
-    segment = segment.toUpperCase()
-    return segment
+    if (!segment) return null
+    return segment.toUpperCase()
   }
+
+  const displayOrder = ["HIGH", "MEDIUM", "LOW", "V-LOW"]
 
   const segmentData = useMemo(() => {
     if (!hcpData || !Array.isArray(hcpData) || hcpData.length === 0) return []
 
-    const segmentPatientMap = new Map()
+    const segmentMap = new Map()
 
-    // Keep the existing logic but ensure territory filter is respected
     hcpData.forEach((record) => {
-      if (record.hcp_segment && record.hcp_id && record.hcp_id !== "-") {
-        const rawSegment = record.hcp_segment.toUpperCase()
-        const formattedSegment = formatSegmentName(rawSegment)
-        if (!segmentPatientMap.has(formattedSegment)) {
-          segmentPatientMap.set(formattedSegment, new Set())
+      const formattedSegment = formatSegmentName(record.hcp_segment)
+      if (formattedSegment && displayOrder.includes(formattedSegment) && record.hcp_id && record.hcp_id !== "-") {
+        if (!segmentMap.has(formattedSegment)) {
+          segmentMap.set(formattedSegment, new Set())
         }
-        segmentPatientMap.get(formattedSegment).add(record.hcp_id)
+        segmentMap.get(formattedSegment).add(record.hcp_id)
       }
     })
 
-    const result = Array.from(segmentPatientMap).map(([name, patientSet]) => ({
-      name,
-      value: patientSet.size,
-      isSelected: selectedSegment === name,
-    }))
-
-    const orderMap = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3 }
-    result.sort((a, b) => (orderMap[a.name] ?? 999) - (orderMap[b.name] ?? 999))
+    const result = displayOrder.map((segment) => {
+      const count = segmentMap.has(segment) ? segmentMap.get(segment).size : 0
+      return {
+        name: segment,
+        value: count,
+        isSelected: selectedSegment === segment,
+      }
+    })
 
     return result
   }, [hcpData, selectedSegment])
@@ -50,7 +49,6 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
 
   return (
     <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-64 p-2">
-      {/* Header */}
       <div className="flex gap-2 items-center mb-2">
         <div className="bg-blue-100 rounded-full h-6 w-6 p-1 flex justify-center items-center">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" className="text-blue-800 h-4 w-4">
@@ -61,28 +59,23 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
           </svg>
         </div>
         <span className="text-gray-500 text-xs font-medium">Prescriber Cluster by Treated Patient Volume</span>
-
-        {selectedSegment && (
-          <span></span>
-          // <span className="ml-2 text-[10px] text-blue-600">(Click on selected bar to clear filter)</span>
-        )}
       </div>
 
-      {/* Chart */}
       <div className="flex-grow">
         {segmentData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 20, left: -10, bottom: 20 }}>
-              <XAxis type="number" hide />
-              <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 10 }} />
-              <Tooltip
-                cursor={{ fill: "#f0f0f0" }}
-                wrapperStyle={{ fontSize: "10px" }}
-                formatter={(value) => [`${value} HCPs`, "Volume"]}
-              />
+            <BarChart
+              layout="vertical"
+              data={segmentData}
+              margin={{ top: 10, right: 30, left: -30, bottom: 10 }}
+              barSize={50}
+            >
+              <XAxis type="number" tick={{ fontSize: 10 }} hide />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} />
+              <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} HCPs`, "Volume"]} />
               <Bar
                 dataKey="value"
-                radius={[0, 10, 10, 0]}
+                radius={[0, 8, 8, 0]}
                 onClick={handleBarClick}
                 cursor="pointer"
                 label={{ position: "insideRight", fill: "#fff", fontSize: 9, dx: 4 }}
@@ -99,7 +92,7 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="text-sm text-gray-500 text-center pt-4">No data available</div>
+          <div className="text-xs text-gray-500">No data available</div>
         )}
       </div>
     </div>

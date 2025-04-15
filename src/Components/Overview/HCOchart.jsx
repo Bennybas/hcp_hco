@@ -91,7 +91,7 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
       </div>
 
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 30, left: -5, bottom: 10 }}>
+        <BarChart layout="vertical" data={segmentData} margin={{ top: 10, right: 30, left: -5, bottom: 10 }}  barSize={50}>
           <XAxis type="number" tick={{ fontSize: 10 }} hide />
           <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={110} />
           <Tooltip wrapperStyle={{ fontSize: "10px" }} formatter={(value) => [`${value} HCOs`, "Volume"]} />
