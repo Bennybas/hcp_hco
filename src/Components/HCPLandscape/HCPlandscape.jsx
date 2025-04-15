@@ -1,10 +1,13 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, X } from "lucide-react"
+import { ChevronDown, X, Download } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Legend } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
+import * as XLSX from "xlsx"
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -912,6 +915,27 @@ const HCPlandscape = () => {
     return Number.parseFloat(value) > 5
   }
 
+  // Export data to Excel
+  const exportToExcel = () => {
+    // Use all table data (which is already filtered based on current filters)
+    const dataToExport = allTableData
+
+    // Create a worksheet
+    const ws = XLSX.utils.json_to_sheet(dataToExport)
+
+    // Create a workbook
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "HCP Data")
+
+    // Generate filename with date
+    const date = new Date()
+    const dateStr = date.toISOString().split("T")[0]
+    const fileName = `HCP_Landscape_${dateStr}.xlsx`
+
+    // Write the workbook and trigger download
+    XLSX.writeFile(wb, fileName)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1574,6 +1598,14 @@ const HCPlandscape = () => {
             <span className="text-gray-500 text-[11px] font-[500]">HCPs List</span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Export Excel Button */}
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
             <span className="text-gray-500 text-[11px]">Show rows:</span>
             <select
               className="border border-gray-300 rounded text-[11px] p-1"
@@ -1624,7 +1656,6 @@ const HCPlandscape = () => {
             </tbody>
           </table>
         </div>
-
 
         {/* Pagination with 5 visible pages */}
         {totalPages > 1 && (

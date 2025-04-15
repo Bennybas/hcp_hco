@@ -1,10 +1,13 @@
+"use client"
+
 import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, ChevronRight, ChevronLeft, X, Check } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronLeft, X, Check, Download } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
+import * as XLSX from "xlsx"
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -137,18 +140,15 @@ const AccountLandscape = () => {
     // Extract unique age groups
     const ages = [
       "All",
-      ...[...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))].sort(
-        (a, b) => {
-          const ageOrder = {
-            "0 to 2": 1,
-            "3 to 17": 2,
-            "Above 18": 3,
-          };
-          return ageOrder[a] - ageOrder[b];
+      ...[...new Set(data.map((item) => item.age_group).filter((age) => age && age !== "-"))].sort((a, b) => {
+        const ageOrder = {
+          "0 to 2": 1,
+          "3 to 17": 2,
+          "Above 18": 3,
         }
-      ),
-    ];
-    
+        return ageOrder[a] - ageOrder[b]
+      }),
+    ]
 
     // Extract unique brands (drug names)
     const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
@@ -1092,6 +1092,27 @@ const AccountLandscape = () => {
     return Number.parseFloat(value) > 5
   }
 
+  // Export data to Excel
+  const exportToExcel = () => {
+    // Use all table data (which is already filtered based on current filters)
+    const dataToExport = allAccountTableData
+
+    // Create a worksheet
+    const ws = XLSX.utils.json_to_sheet(dataToExport)
+
+    // Create a workbook
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Account Data")
+
+    // Generate filename with date
+    const date = new Date()
+    const dateStr = date.toISOString().split("T")[0]
+    const fileName = `Account_Landscape_${dateStr}.xlsx`
+
+    // Write the workbook and trigger download
+    XLSX.writeFile(wb, fileName)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1805,6 +1826,14 @@ const AccountLandscape = () => {
             <span className="text-gray-500 text-[11px] font-[500]">Accounts List</span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Export Excel Button */}
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
             <span className="text-gray-500 text-[11px]">Show rows:</span>
             <select
               className="border border-gray-300 rounded text-[11px] p-1"
@@ -1825,7 +1854,7 @@ const AccountLandscape = () => {
                 <th className="p-2 text-left">Rank</th>
                 <th className="p-2 text-left">Account ID</th>
                 <th className="p-2 text-left">No. HCPs</th>
-                
+
                 <th className="p-2 text-left">Affiliated Accounts</th>
                 {/* <th className="p-2 text-left">Account Tier</th> */}
                 <th className="p-2 text-left">Account Grouping</th>
@@ -1842,7 +1871,7 @@ const AccountLandscape = () => {
                     {hco["Account ID"]}
                   </td>
                   <td className="p-2">{hco["No. HCPs"]}</td>
-                  
+
                   <td onClick={() => getHCODetails(hco["Account ID"])} className="p-2 cursor-pointer">
                     {hco["Affiliated Account"]}
                   </td>

@@ -25,7 +25,8 @@
     "react-spinners": "^0.15.0",
     "react-tooltip": "^5.28.0",
     "recharts": "^2.15.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",
