@@ -882,7 +882,14 @@ const HCOdeepDive = () => {
             </div>
             <div className="w-full">
               <div className="text-[10px] text-gray-600">Zolgensma Prescriber</div>
-              <div className="text-[12px] font-semibold text-gray-900">{hcoData[0]?.zolg_prescriber || "0"}</div>
+              <div className="text-[12px] font-semibold text-gray-900">
+              {
+  hcoData.some(item =>
+    item.zolg_prescriber?.toString().trim().toUpperCase() === "YES"
+  ) ? "YES" : "NO"
+}
+
+              </div>
               <hr className="border-gray-300 w-full my-2" />
             </div>
 
