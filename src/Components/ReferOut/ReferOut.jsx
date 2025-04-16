@@ -1208,9 +1208,9 @@ const ReferOut = ({ referType = "HCP" }) => {
         </div>
       <div className="flex justify-end -mt-4 items-center">
         <img src="/location-marker.svg" alt="hcp-hco" className="h-4 w-4" />
-       <span className="text-[12px] text-gray-600">Referer</span>
+       <span className="text-[12px] text-gray-600">Renderer</span>
         <img src="/location-mark2.svg" alt="hcp-hco" className="h-4 w-4" />
-        <span className="text-[12px] text-gray-600">Renderer</span>
+        <span className="text-[12px] text-gray-600">Referer</span>
       </div>
       </div>
     

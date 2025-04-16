@@ -939,6 +939,17 @@ const USAMap = ({
                 const stateAbbr = stateNameToAbbreviation[stateName]
                 const patientCount = stateAbbr ? patientStateCounts[stateAbbr] || 0 : 0
 
+                // If a state is selected and this is not the selected state, make it colorless
+                if (selectedState && stateAbbr !== selectedState) {
+                  return {
+                    fillColor: "#EEE", // Light gray for non-selected states
+                    weight: 1,
+                    opacity: 1,
+                    color: "white",
+                    fillOpacity: 0.3, // Lower opacity
+                  }
+                }
+
                 // Check if territory filter is active
                 const hasTerritoryFilter = selectedTerritories && selectedTerritories.length > 0
 
@@ -1073,6 +1084,7 @@ const USAMap = ({
     onStateSelect,
     selectedTerritories,
     statesInSelectedTerritories,
+    selectedState,
   ])
 
   // Add this CSS to the top of the file to ensure markers are visible
@@ -1123,6 +1135,15 @@ const USAMap = ({
         const stateAbbr = stateNameToAbbreviation[stateName]
         const patientCount = stateAbbr ? patientStateCounts[stateAbbr] || 0 : 0
 
+        // If a state is selected and this is not the selected state, make it colorless
+        if (selectedState && stateAbbr !== selectedState) {
+          layer.setStyle({
+            fillColor: "#EEE", // Light gray for non-selected states
+            fillOpacity: 0.3, // Lower opacity
+          })
+          return
+        }
+
         // Check if territory filter is active
         const hasTerritoryFilter = selectedTerritories && selectedTerritories.length > 0
 
@@ -1142,7 +1163,7 @@ const USAMap = ({
     } catch (error) {
       console.error("Error updating state styles:", error)
     }
-  }, [colorScale, patientStateCounts, selectedTerritories, statesInSelectedTerritories])
+  }, [colorScale, patientStateCounts, selectedTerritories, statesInSelectedTerritories, selectedState])
 
   // Update markers when selectedState or filters change
   useEffect(() => {

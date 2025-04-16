@@ -519,6 +519,7 @@ const Overview = () => {
                     onClick={(e) => {
                       e.stopPropagation()
                       handleYearToggle(year)
+                      setShowYearDropdown(!showYearDropdown)
                     }}
                   >
                     <input
@@ -562,6 +563,7 @@ const Overview = () => {
                     onClick={(e) => {
                       e.stopPropagation()
                       handleTerritoryToggle(territory)
+                      setShowTerritoryDropdown(!showTerritoryDropdown)
                     }}
                   >
                     <input

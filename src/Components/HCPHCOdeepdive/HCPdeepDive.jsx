@@ -1,5 +1,3 @@
-"use client"
-
 import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"

@@ -1334,7 +1334,7 @@ const AccountLandscape = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Treated in Last 12M</span>
+              <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Treated</span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -1358,7 +1358,7 @@ const AccountLandscape = () => {
             <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
               <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
             </div>
-            <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Referred in Last 12M</span>
+            <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Referred</span>
           </div>
           <span className="text-gray-700 text-[16px] font-[500] pl-2">{kpiData.patientsReferred.toLocaleString()}</span>
         </div>
@@ -1858,8 +1858,8 @@ const AccountLandscape = () => {
                 <th className="p-2 text-left">Affiliated Accounts</th>
                 {/* <th className="p-2 text-left">Account Tier</th> */}
                 <th className="p-2 text-left">Account Grouping</th>
-                <th className="p-2 text-left">SMA. Patients</th>
-                <th className="p-2 text-left">Zolgensma Naive</th>
+                <th className="p-2 text-left">SMA Patients</th>
+                <th className="p-2 text-left">SMA Patients <br />(Zolgensma Naive)</th>
               </tr>
             </thead>
 

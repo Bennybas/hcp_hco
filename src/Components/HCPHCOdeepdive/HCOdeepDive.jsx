@@ -102,13 +102,7 @@ const HCOdeepDive = () => {
         setTableLoading(true)
         setReferralLoading(true)
 
-        const hcoUrl = (hcoMdm) => {
-          const isNumeric = /^\d+$/.test(hcoMdm);
-          return isNumeric
-            ? `${api}/hco-360?hco_mdm=${encodeURIComponent(hcoMdm)}`
-            : `${api}/hco-360?hco_mdm_name=${encodeURIComponent(hcoMdm)}`;
-        };
-        
+        const hcoUrl = `${api}/hco-360?hco_mdm=${encodeURIComponent(hcoMdm)}`
         const response = await fetch(hcoUrl)
         const data = await response.json()
 

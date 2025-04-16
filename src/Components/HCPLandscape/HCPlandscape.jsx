@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X, Download } from "lucide-react"
@@ -1165,7 +1163,7 @@ const HCPlandscape = () => {
               <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                 <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
               </div>
-              <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Treated in Last 12M</span>
+              <span className="text-gray-500 text-[11px] font-[500]">SMA Patients Treated </span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -1630,8 +1628,8 @@ const HCPlandscape = () => {
                 <th className="p-2 text-center">State</th>
                 <th className="p-2 text-center">HCP Segment</th>
                 <th className="p-2 text-center">Affiliated Accounts</th>
-                <th className="p-2 text-center">Patient Count</th>
-                <th className="p-2 text-center">Zolgensma Naive</th>
+                <th className="p-2 text-center">SMA Patients</th>
+                <th className="p-2 text-center">SMA Patients  <br /> (Zolgensma Naive)</th>
               </tr>
             </thead>
 
