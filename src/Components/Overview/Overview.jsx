@@ -469,6 +469,7 @@ const Overview = () => {
 
   const getHCODetails = (hcoId) => {
     navigate("/hco", { state: { hco_id: hcoId } })
+    console.log("/hco",hcoId)
   }
 
   // Function to force refresh data

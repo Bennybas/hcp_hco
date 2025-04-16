@@ -20,7 +20,7 @@ import {
 import { useLocation } from "react-router-dom"
 import * as d3 from "d3"
 import api from "../api/api"
-import { PropagateLoader } from "react-spinners";
+import { PropagateLoader } from "react-spinners"
 
 const HCOdeepDive = () => {
   const navigate = useNavigate()
@@ -102,7 +102,11 @@ const HCOdeepDive = () => {
         setTableLoading(true)
         setReferralLoading(true)
 
-        const hcoUrl = `${api}/hco-360?hco_mdm=${encodeURIComponent(hcoMdm)}`
+        const isNumeric = /^\d+$/;
+        const hcoUrl = isNumeric.test(hcoMdm)
+          ? `${api}/hco-360?hco_mdm=${encodeURIComponent(hcoMdm)}`
+          : `${api}/hco-360?hco_mdm_name=${encodeURIComponent(hcoMdm)}`;
+
         const response = await fetch(hcoUrl)
         const data = await response.json()
 
@@ -739,16 +743,44 @@ const HCOdeepDive = () => {
         .text((d) => d.patients)
 
       // Add text labels for node names
-      nodeGroups
-        .append("text")
-        .attr("x", (d) => (d.level === 0 ? -35 : 20))
-        .attr("y", (d) => 0)
-        .attr("text-anchor", (d) => (d.level === 0 ? "end" : "start"))
-        .attr("font-size", "11px")
-        .attr("font-weight", "500")
-        .attr("fill", "#333")
-        .attr("dy", ".35em")
-        .text((d) => d.name)
+      nodeGroups.each(function (d) {
+        const node = d3.select(this)
+
+        if (d.type === "referred") {
+          // Create a foreign object to hold the button
+          const fo = node.append("foreignObject").attr("x", 20).attr("y", -10).attr("width", 200).attr("height", 20)
+
+          // Add a button inside the foreign object
+          fo.append("xhtml:button")
+            .style("background", "none")
+            .style("border", "none")
+            .style("padding", "0")
+            .style("margin", "0")
+            .style("font-size", "11px")
+            .style("font-weight", "500")
+            .style("color", "#333")
+            .style("cursor", "pointer")
+            .style("text-decoration", "underline")
+            .style("text-align", "left")
+            .html(d.name)
+            .on("click", (event) => {
+              event.stopPropagation()
+              getHCODetails(d.name)
+            })
+        } else {
+          // For non-referred nodes (like the root), keep as regular text
+          node
+            .append("text")
+            .attr("x", d.level === 0 ? -35 : 20)
+            .attr("y", 0)
+            .attr("text-anchor", d.level === 0 ? "end" : "start")
+            .attr("font-size", "11px")
+            .attr("font-weight", "500")
+            .attr("fill", "#333")
+            .attr("dy", ".35em")
+            .text(d.name)
+        }
+      })
 
       // Add within/outside indicator for referred HCO nodes
       nodeGroups
@@ -785,13 +817,18 @@ const HCOdeepDive = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-          <PropagateLoader color="#0460A9" size={10} />
+        <PropagateLoader color="#0460A9" size={10} />
       </div>
     )
   }
 
   const getHCPDetails = (hcpName) => {
     navigate("/hcp", { state: { hcp_name: hcpName } })
+  }
+
+  const getHCODetails = (hconame) => {
+    navigate("/hco", { state: { hco_id: hconame } })
+    console.log("hcoName:", hconame)
   }
 
   return (

@@ -1164,44 +1164,56 @@ const ReferOut = ({ referType = "HCP" }) => {
       </div>
 
       {/* Year Filter - Expandable like in other components */}
-      <div
-        className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2 items-center gap-2 cursor-pointer transition-all duration-300 ${
-          expanded ? "max-w-fit" : "w-20 justify-between"
-        }`}
-        onClick={toggleExpanded}
-      >
-        <span className="text-gray-600 text-[12px]">Year</span>
+      <div className="w-full justify-between items-center">
 
-        {expanded ? (
-          <>
-            <div className="flex flex-wrap gap-2 ml-2 mr-2">
-              {filterOptions.years.map((year) => (
-                <button
-                  key={year}
-                  className={`flex items-center text-[10px] py-1 px-4 rounded-full border transition ${
-                    year === "All"
-                      ? filters.years.length === 0
-                        ? "bg-[#217fad] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
-                      : filters.years.includes(year)
-                        ? "bg-[#217fad] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation() // Prevent parent div click
-                    handleFilterChange("years", year)
-                  }}
-                >
-                  {year}
-                </button>
-              ))}
-            </div>
-            <ChevronLeft className="text-gray-600 w-4 h-4 ml-auto" />
-          </>
-        ) : (
-          <ChevronRight className="text-gray-600 w-4 h-4" />
-        )}
+      
+        <div
+          className={`flex flex-wrap bg-white border-b border-x border-gray-300 rounded-xl p-2 items-center gap-2 cursor-pointer transition-all duration-300 ${
+            expanded ? "max-w-fit" : "w-20 justify-between"
+          }`}
+          onClick={toggleExpanded}
+        >
+          <span className="text-gray-600 text-[12px]">Year</span>
+
+          {expanded ? (
+            <>
+              <div className="flex flex-wrap gap-2 ml-2 mr-2">
+                {filterOptions.years.map((year) => (
+                  <button
+                    key={year}
+                    className={`flex items-center text-[10px] py-1 px-4 rounded-full border transition ${
+                      year === "All"
+                        ? filters.years.length === 0
+                          ? "bg-[#217fad] text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                        : filters.years.includes(year)
+                          ? "bg-[#217fad] text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent parent div click
+                      handleFilterChange("years", year)
+                    }}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+              <ChevronLeft className="text-gray-600 w-4 h-4 ml-auto" />
+            </>
+          ) : (
+            <ChevronRight className="text-gray-600 w-4 h-4" />
+          )}
+          
+        </div>
+      <div className="flex justify-end -mt-4 items-center">
+        <img src="/location-marker.svg" alt="hcp-hco" className="h-4 w-4" />
+       <span className="text-[12px] text-gray-600">Referer</span>
+        <img src="/location-mark2.svg" alt="hcp-hco" className="h-4 w-4" />
+        <span className="text-[12px] text-gray-600">Renderer</span>
       </div>
+      </div>
+    
 
       <div className="flex gap-4 w-full">
         {/* Left Side - Referring Entities */}
@@ -1275,6 +1287,7 @@ const ReferOut = ({ referType = "HCP" }) => {
 
         {/* Center Map */}
         <div className="flex flex-col w-[60%] h-[calc(100vh-120px)] bg-white rounded-xl border-b border-x border-gray-300 relative">
+          
           {filterLoading && (
             <div className="absolute inset-0 bg-white bg-opacity-70 z-50 flex items-center justify-center transition-opacity duration-150 ease-in-out">
               <div className="flex flex-col items-center bg-white p-4 rounded-lg shadow-md">
