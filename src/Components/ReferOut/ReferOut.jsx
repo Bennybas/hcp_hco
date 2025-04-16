@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { ChevronDown, Search, Loader, ChevronRight, ChevronLeft, Check } from "lucide-react"
+import { ChevronDown, Search, Loader, ChevronRight, ChevronLeft, Check, ExternalLink } from "lucide-react"
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import JSONData from "../../data/refer.json"
 import { PropagateLoader } from "react-spinners";
+import { useNavigate } from "react-router-dom"
 
 
 // Custom icons for the map
@@ -18,6 +19,7 @@ const createMapIcon = (iconUrl, iconSize) => {
     popupAnchor: [0, -iconSize],
   })
 }
+
 
 // Location marker icon for rendering HCPs/HCOs
 const locationIcon = createMapIcon("/location-marker.svg", 30)
@@ -96,6 +98,7 @@ const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, select
 }
 
 const ReferOut = ({ referType = "HCP" }) => {
+  const navigate = useNavigate();
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterLoading, setFilterLoading] = useState(false)
@@ -516,7 +519,8 @@ const ReferOut = ({ referType = "HCP" }) => {
   }
 
   // Memoized referring entities with counts
-  const referringEntities = useMemo(() => {
+  const referringEntities =
+  useMemo(() => {
     const entityMap = new Map()
 
     filteredData.forEach((item) => {
@@ -526,48 +530,10 @@ const ReferOut = ({ referType = "HCP" }) => {
       if (!entityName || !item.ref_npi) return
 
       if (!entityMap.has(entityName)) {
-        entityMap.set(entityName, new Set())
-      }
-
-      // Add patient to the set if it exists
-      if (item.patient_id) {
-        entityMap.get(entityName).add(item.patient_id)
-      }
-    })
-
-    // Convert to array and sort by count
-    return Array.from(entityMap.entries())
-      .map(([name, patients]) => ({
-        name,
-        count: patients.size,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .filter((entity) => {
-        // Apply search filter
-        if (!searchTerms.referring) return true
-        return entity.name.toLowerCase().includes(searchTerms.referring.toLowerCase())
-      })
-  }, [filteredData, referType, searchTerms.referring])
-
-  // Memoized rendering entities with counts
-  const renderingEntities = useMemo(() => {
-    const entityMap = new Map()
-
-    filteredData.forEach((item) => {
-      const entityName = referType === "HCP" ? item.hcp_name : item.hco_mdm_name
-
-      // Skip if entity name is null
-      if (!entityName) return
-
-      // Only count if ref_npi exists (patient was referred)
-      if (!item.ref_npi) return
-
-      if (!entityMap.has(entityName)) {
         entityMap.set(entityName, {
           patients: new Set(),
-          isWithinOrg: item.ref_organization_mdm_name === item.hco_mdm_name,
-          refOrgName: item.ref_organization_mdm_name,
-          rendOrgName: item.hco_mdm_name,
+          hco_mdm: item.hco_mdm,
+          ref_hco_npi_mdm: item.ref_hco_npi_mdm, // Store the ref_hco_npi_mdm for referring HCOs
         })
       }
 
@@ -577,6 +543,50 @@ const ReferOut = ({ referType = "HCP" }) => {
       }
     })
 
+    return Array.from(entityMap.entries())
+      .map(([name, data]) => ({
+        name,
+        count: data.patients.size,
+        hco_mdm: data.hco_mdm,
+        ref_hco_npi_mdm: data.ref_hco_npi_mdm, 
+      }))
+      .sort((a, b) => b.count - a.count)
+      .filter((entity) => {
+        if (!searchTerms.referring) return true
+        return entity.name.toLowerCase().includes(searchTerms.referring.toLowerCase())
+      })
+  }, [filteredData, referType, searchTerms.referring])
+  
+
+  // Memoized rendering entities with counts
+  const renderingEntities = useMemo(() => {
+    const entityMap = new Map()
+  
+    filteredData.forEach((item) => {
+      const entityName = referType === "HCP" ? item.hcp_name : item.hco_mdm_name
+  
+      // Skip if entity name is null
+      if (!entityName) return
+  
+      // Only count if ref_npi exists (patient was referred)
+      if (!item.ref_npi) return
+  
+      if (!entityMap.has(entityName)) {
+        entityMap.set(entityName, {
+          patients: new Set(),
+          isWithinOrg: item.ref_organization_mdm_name === item.hco_mdm_name,
+          refOrgName: item.ref_organization_mdm_name,
+          rendOrgName: item.hco_mdm_name,
+          hco_mdm: item.hco_mdm, // ✅ added hco_mdm here
+        })
+      }
+  
+      // Add patient to the set if it exists
+      if (item.patient_id) {
+        entityMap.get(entityName).patients.add(item.patient_id)
+      }
+    })
+  
     // Convert to array and sort by count
     return Array.from(entityMap.entries())
       .map(([name, data]) => ({
@@ -585,6 +595,7 @@ const ReferOut = ({ referType = "HCP" }) => {
         isWithinOrg: data.isWithinOrg,
         refOrgName: data.refOrgName,
         rendOrgName: data.rendOrgName,
+        hco_mdm: data.hco_mdm, // ✅ included in return object
       }))
       .sort((a, b) => b.count - a.count)
       .filter((entity) => {
@@ -593,7 +604,7 @@ const ReferOut = ({ referType = "HCP" }) => {
         return entity.name.toLowerCase().includes(searchTerms.rendering.toLowerCase())
       })
   }, [filteredData, referType, searchTerms.rendering])
-
+  
   // Memoized map connections
   const mapConnections = useMemo(() => {
     const connections = []
@@ -791,6 +802,14 @@ const ReferOut = ({ referType = "HCP" }) => {
         <div className="text-red-500">{error}</div>
       </div>
     )
+  }
+  const getHCPDetails = (hcpName) => {
+    navigate("/hcp", { state: { hcp_name: hcpName } })
+    
+  }
+  const getHCODetails = (hcoID) => {
+    navigate("/hco", { state: { hco_id: hcoID } })
+    console.log('hcoID:',hcoID)
   }
 
   return (
@@ -1220,7 +1239,31 @@ const ReferOut = ({ referType = "HCP" }) => {
                   }`}
                   onClick={() => handleEntitySelect("referring", entity.name)}
                 >
-                  <span className="text-[10px] text-gray-800">{entity.name}</span>
+                  <span
+                  className="text-[10px] text-gray-800 flex flex-col gap-1">{entity.name} 
+                  <span>
+                  {
+                    referType === "HCP" ? (
+                      <ExternalLink
+                        onClick={(e) => {
+                          e.stopPropagation() // Stop event from bubbling up to parent
+                          getHCPDetails(entity.name)
+                        }}
+                        className="w-2 h-2 text-blue-500 hover:text-blue-700"
+                      />
+                    ) : (
+                      <ExternalLink
+                        onClick={(e) => {
+                          e.stopPropagation() // Stop event from bubbling up to parent
+                          getHCODetails(entity.ref_hco_npi_mdm) // Use ref_hco_npi_mdm for referring HCOs
+                        }}
+                        className="w-2 h-2 text-blue-500 hover:text-blue-700"
+                      />
+                    )
+                  }
+                  </span>
+                  </span>
+                  
                   <span className="text-[10px] text-gray-800">{entity.count}</span>
                 </div>
               ))
@@ -1309,17 +1352,45 @@ const ReferOut = ({ referType = "HCP" }) => {
                   onClick={() => handleEntitySelect("rendering", entity.name)}
                 >
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-gray-800">
-                      {entity.name}
-                      {selectedEntity.referring && (
+                      <span className="text-[10px] text-gray-800 flex flex-col gap-1">
+                    {
+                      entity.name
+                    }
+                    <span>
+                      {
+                        referType === "HCP" ? (
+                          <ExternalLink
+                            onClick={(e) => {
+                              e.stopPropagation() // Stop event from bubbling up to parent
+                              getHCPDetails(entity.name)
+                            }}
+                            className="w-2 h-2 text-blue-500 hover:text-blue-700"
+                          />
+                        ) : (
+                          <ExternalLink
+                            onClick={(e) => {
+                              e.stopPropagation() // Stop event from bubbling up to parent
+                              getHCODetails(entity.hco_mdm) // Use hco_mdm for rendering HCOs
+                            }}
+                            className="w-2 h-2 text-blue-500 hover:text-blue-700"
+                          />
+                        )
+                      }
+
+                    </span>
+                    {
+                      selectedEntity.referring && (
                         <span
-                          className={`text-[8px] px-1 py-0.5 rounded ${entity.isWithinOrg ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
+                          className={`text-[8px] px-1 py-0.5 w-8 rounded ${entity.isWithinOrg ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}
                         >
                           {entity.isWithinOrg ? "Within" : "Outside"}
                         </span>
-                      )}
+                      )
+                    }
                     </span>
-                  </div>
+                    
+                    </div>
+
                   <span className="text-[10px] text-gray-800">{entity.count}</span>
                 </div>
               ))
