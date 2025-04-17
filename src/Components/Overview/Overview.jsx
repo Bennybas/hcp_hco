@@ -9,6 +9,7 @@ import USAMap from "./Map"
 import api from "../api/api"
 import { ChevronDown, X } from "lucide-react"
 import { PropagateLoader } from "react-spinners"
+import TerritoryMap from "./Map2"
 
 const Overview = () => {
   const navigate = useNavigate()
@@ -710,14 +711,21 @@ const Overview = () => {
             selectedHcpSegment={selectedHcpSegment}
             selectedHcoGrouping={selectedHcoGrouping}
           />
+
+          {/* <TerritoryMap onStateSelect={handleStateSelect}
+            selectedState={selectedState}
+            selectedTerritories={selectedTerritories}
+            selectedYears={selectedYears}
+            selectedHcpSegment={selectedHcpSegment}
+            selectedHcoGrouping={selectedHcoGrouping}/> */}
         </div>
 
         <div className="flex flex-col w-[29%] gap-2">
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+                <div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Total HCOs</span>
               </div>
@@ -725,8 +733,8 @@ const Overview = () => {
             </div>
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+                <div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Prescribing HCOs</span>
               </div>
@@ -736,8 +744,8 @@ const Overview = () => {
             </div>
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+<div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Treating HCOs</span>
               </div>
@@ -747,8 +755,8 @@ const Overview = () => {
             </div>
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+<div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Avg.Treated Patients per HCOs</span>
               </div>
@@ -758,8 +766,8 @@ const Overview = () => {
             </div>
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+<div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Referring HCOs</span>
               </div>
@@ -769,8 +777,8 @@ const Overview = () => {
             </div>
             <div className="flex flex-col bg-white rounded-xl border-b border-x border-gray-300 w-full h-20 p-2 justify-between">
               <div className="flex gap-2 items-center">
-                <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-                  <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+<div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+                  <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
                 <span className="text-gray-500 text-[11px] font-[500]">Avg.Patients Referred per HCO</span>
               </div>
@@ -837,8 +845,8 @@ const Overview = () => {
 
         <div className="flex flex-col bg-white rounded-xl border border-gray-300 w-[50%]  shadow-sm">
           <div className="flex gap-2 items-center p-2">
-            <div className="bg-blue-100 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
-              <FaUserDoctor className="text-[#004567] h-[0.8rem] w-[0.8rem]" />
+            <div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
+              <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
             </div>
             <span className="text-gray-500 text-[11px] font-[500]">Top 10 HCOs by SMA Treated Patients Vol</span>
           </div>
@@ -846,7 +854,7 @@ const Overview = () => {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-blue-200 text-gray-700 text-[10px] font-medium">
+                <tr className="bg-[#e74a21]/10 text-gray-700 text-[10px] font-medium">
                   <th className="p-2 text-left">HCO MDM ID</th>
                   <th className="p-2 text-left">HCO Name</th>
 

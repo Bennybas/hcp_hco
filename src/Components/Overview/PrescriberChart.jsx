@@ -39,7 +39,7 @@ const PrescriberClusterChart = ({ hcpData, onSegmentClick, selectedSegment }) =>
   }, [hcpData, selectedSegment])
 
   const COLORS = ["#217fad"]
-  const SELECTED_COLOR = "#0c4a6e"
+  const SELECTED_COLOR = "#217fad"
 
   const handleBarClick = (data) => {
     if (onSegmentClick) {

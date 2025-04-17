@@ -79,7 +79,7 @@ const MapMarkers = ({ referringMarkers, renderingMarkers, mapConnections, select
           <Polyline
             positions={[connection.refPosition, connection.rendPosition]}
             pathOptions={{
-              color: "blue",
+              color: "#7d7bab",
               weight: 2,
               dashArray: "5, 5",
               opacity: 0.7,

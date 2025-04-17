@@ -62,8 +62,8 @@ const HCOchart = ({ HCOdata, onGroupingClick, selectedGrouping }) => {
     return result
   }, [HCOdata, selectedGrouping])
 
-  const colors = ["#217fad"]
-  const selectedColor = "#0c4a6e"
+  const colors = ["#e74a21"]
+  const selectedColor = "#e74a21"
 
   const handleBarClick = (data) => {
     if (onGroupingClick) {
