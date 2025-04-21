@@ -1,3 +1,5 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
 import { ChevronDown, X, Download } from "lucide-react"
@@ -34,6 +36,7 @@ const HCPlandscape = () => {
     brands: [], // Changed to array for multi-select
     ages: [], // Changed to array for multi-select
     states: [], // Added state filter
+    hcpSegments: [], // Added HCP segment filter
     selectedQuarter: null, // For quarter filtering
     selectedYear: null, // For year filtering
     segment: null, // For segment filtering
@@ -49,6 +52,7 @@ const HCPlandscape = () => {
     brands: [],
     ages: [],
     states: [], // Added state options
+    hcpSegments: [], // Added HCP segment options
   })
 
   // Dropdown state
@@ -125,6 +129,9 @@ const HCPlandscape = () => {
           return false
         }
       }
+
+      // HCP Segment filter - check if any selected segments match
+      if (filters.hcpSegments.length > 0 && !filters.hcpSegments.includes(item.hcp_segment)) return false
 
       // Quarter and Year filter
       if (filters.selectedQuarter !== null && filters.selectedYear !== null) {
@@ -224,12 +231,27 @@ const HCPlandscape = () => {
     const allStates = [...hcpStates, ...refHcpStates]
     const uniqueStates = [...new Set(allStates)].sort()
 
+    // Extract unique HCP segments
+    const hcpSegments = [
+      ...new Set(data.map((item) => item.hcp_segment).filter((segment) => segment && segment !== "-")),
+    ]
+
+    // Sort segments in the correct order: HIGH, MEDIUM, LOW, V-LOW
+    const segmentOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, "V-LOW": 3 }
+
+    hcpSegments.sort((a, b) => {
+      const orderA = segmentOrder[a] !== undefined ? segmentOrder[a] : 999
+      const orderB = segmentOrder[b] !== undefined ? segmentOrder[b] : 999
+      return orderA - orderB
+    })
+
     setFilterOptions((prev) => ({
       ...prev,
       years: years,
       brands,
       ages,
       states: uniqueStates,
+      hcpSegments,
     }))
   }
 
@@ -675,8 +697,14 @@ const HCPlandscape = () => {
     setFilters((prev) => {
       const newFilters = { ...prev }
 
-      // Handle multi-select filters (years, brands, ages, states)
-      if (filterName === "years" || filterName === "brands" || filterName === "ages" || filterName === "states") {
+      // Handle multi-select filters (years, brands, ages, states, hcpSegments)
+      if (
+        filterName === "years" ||
+        filterName === "brands" ||
+        filterName === "ages" ||
+        filterName === "states" ||
+        filterName === "hcpSegments"
+      ) {
         const currentValues = [...prev[filterName]]
         const valueIndex = currentValues.indexOf(value)
 
@@ -837,6 +865,7 @@ const HCPlandscape = () => {
       brands: [],
       ages: [],
       states: [],
+      hcpSegments: [],
       selectedQuarter: null,
       selectedYear: null,
       segment: null,
@@ -898,6 +927,7 @@ const HCPlandscape = () => {
       filters.brands.length > 0 ||
       filters.ages.length > 0 ||
       filters.states.length > 0 ||
+      filters.hcpSegments.length > 0 ||
       filters.selectedQuarter !== null ||
       filters.segment !== null ||
       filters.selectedDrug !== null ||
@@ -947,6 +977,41 @@ const HCPlandscape = () => {
       {/* Filters and Clear Button */}
       <div className="flex justify-between items-center">
         <div className="flex gap-4 items-center flex-wrap">
+          {/* HCP Segment Filter - New filter added */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[150px]"
+              onClick={() => toggleDropdown("hcpSegment")}
+            >
+              <span className="text-[12px] text-gray-600">
+                HCP Segment: {filters.hcpSegments.length > 0 ? filters.hcpSegments.join(", ") : "All"}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "hcpSegment" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.hcpSegments.map((segment) => (
+                  <div
+                    key={segment}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("hcpSegments", segment)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filters.hcpSegments.includes(segment)}
+                      onChange={() => {}}
+                      className="mr-2"
+                    />
+                    {segment}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* State Filter - Added new filter */}
           <div className="relative">
             <div
@@ -1083,6 +1148,18 @@ const HCPlandscape = () => {
           </div>
 
           {/* Active Filters Display */}
+          {filters.hcpSegments.length > 0 && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              HCP Segments: {filters.hcpSegments.join(", ")}
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, hcpSegments: [] }))}
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           {filters.states.length > 0 && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               States: {filters.states.join(", ")}
@@ -1629,7 +1706,9 @@ const HCPlandscape = () => {
                 <th className="p-2 text-center">HCP Segment</th>
                 <th className="p-2 text-center">Affiliated Accounts</th>
                 <th className="p-2 text-center">SMA Patients</th>
-                <th className="p-2 text-center">SMA Patients  <br /> (Zolgensma Naive)</th>
+                <th className="p-2 text-center">
+                  SMA Patients <br /> (Zolgensma Naive)
+                </th>
               </tr>
             </thead>
 

@@ -703,21 +703,21 @@ const Overview = () => {
         </div>
 
         <div className="flex flex-col w-[42%] ">
-          <USAMap
+          {/* <USAMap
             onStateSelect={handleStateSelect}
             selectedState={selectedState}
             selectedTerritories={selectedTerritories}
             selectedYears={selectedYears}
             selectedHcpSegment={selectedHcpSegment}
             selectedHcoGrouping={selectedHcoGrouping}
-          />
+          /> */}
 
-          {/* <TerritoryMap onStateSelect={handleStateSelect}
+          <TerritoryMap onStateSelect={handleStateSelect}
             selectedState={selectedState}
             selectedTerritories={selectedTerritories}
             selectedYears={selectedYears}
             selectedHcpSegment={selectedHcpSegment}
-            selectedHcoGrouping={selectedHcoGrouping}/> */}
+            selectedHcoGrouping={selectedHcoGrouping}/>
         </div>
 
         <div className="flex flex-col w-[29%] gap-2">
