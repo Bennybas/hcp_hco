@@ -51,6 +51,7 @@ const AccountLandscape = () => {
     ageFilters: [], // Changed to array for multi-select
     brands: [], // Changed to array for multi-select
     states: [], // Changed to array for multi-select
+    accountGroupings: [], // New filter for account groupings
     kol: "All",
     zolgPrescriber: "All",
     zolgIVTarget: "All",
@@ -70,6 +71,7 @@ const AccountLandscape = () => {
     ages: ["All"],
     brands: ["All"],
     states: ["All"],
+    accountGroupings: ["All"], // New filter options for account groupings
   })
 
   // Handler for state selection from the map
@@ -156,11 +158,46 @@ const AccountLandscape = () => {
     // Extract unique states
     const states = ["All", ...new Set(data.map((item) => item.hco_state).filter((state) => state && state !== "-"))]
 
+    // Extract unique account groupings
+    const accountGroupings = [
+      "All",
+      ...new Set(
+        data
+          .map((item) => {
+            // Format the group name (replace DELETE with UNSPECIFIED)
+            if (!item.hco_grouping || item.hco_grouping === "-") return null
+            return item.hco_grouping.toUpperCase() === "DELETE" ? "UNSPECIFIED" : item.hco_grouping
+          })
+          .filter(Boolean),
+      ),
+    ]
+
+    // Define display order for HCO groupings
+    const displayOrder = [
+      "All",
+      "CURRENT IV",
+      "IV AFFILIATES",
+      "NEW IT TREATMENT CENTERS",
+      "NEW TREATMENT CENTERS",
+      "UNSPECIFIED",
+    ]
+
+    // Sort account groupings according to display order
+    accountGroupings.sort((a, b) => {
+      const indexA = displayOrder.indexOf(a)
+      const indexB = displayOrder.indexOf(b)
+      if (indexA === -1 && indexB === -1) return a.localeCompare(b)
+      if (indexA === -1) return 1
+      if (indexB === -1) return -1
+      return indexA - indexB
+    })
+
     setFilterOptions((prev) => ({
       ...prev,
       ages,
       brands,
       states,
+      accountGroupings,
     }))
   }
 
@@ -202,6 +239,13 @@ const AccountLandscape = () => {
 
       // State filter - check if any selected states match or if no states are selected
       if (filters.states.length > 0 && !filters.states.includes(item.hco_state)) return false
+
+      // Account Grouping filter - check if any selected account groupings match or if no account groupings are selected
+      if (filters.accountGroupings.length > 0) {
+        // Format the group name (replace DELETE with UNSPECIFIED)
+        const formattedGrouping = item.hco_grouping?.toUpperCase() === "DELETE" ? "UNSPECIFIED" : item.hco_grouping
+        if (!filters.accountGroupings.includes(formattedGrouping)) return false
+      }
 
       // KOL filter
       if (filters.kol !== "All" && item.kol !== filters.kol) return false
@@ -857,8 +901,14 @@ const AccountLandscape = () => {
     setFilters((prev) => {
       const newFilters = { ...prev }
 
-      // Handle multi-select filters (years, ageFilters, brands, states)
-      if (filterName === "years" || filterName === "ageFilters" || filterName === "brands" || filterName === "states") {
+      // Handle multi-select filters (years, ageFilters, brands, states, accountGroupings)
+      if (
+        filterName === "years" ||
+        filterName === "ageFilters" ||
+        filterName === "brands" ||
+        filterName === "states" ||
+        filterName === "accountGroupings"
+      ) {
         const currentValues = [...prev[filterName]]
 
         if (value === "All") {
@@ -1045,6 +1095,7 @@ const AccountLandscape = () => {
       ageFilters: [],
       brands: [],
       states: [],
+      accountGroupings: [],
       kol: "All",
       zolgPrescriber: "All",
       zolgIVTarget: "All",
@@ -1065,6 +1116,7 @@ const AccountLandscape = () => {
       filters.ageFilters.length > 0 ||
       filters.brands.length > 0 ||
       filters.states.length > 0 ||
+      filters.accountGroupings.length > 0 ||
       filters.kol !== "All" ||
       filters.zolgPrescriber !== "All" ||
       filters.zolgIVTarget !== "All" ||
@@ -1125,6 +1177,51 @@ const AccountLandscape = () => {
     <div className="flex flex-col gap-4 w-full p-2">
       {/* Filters */}
       <div className="flex gap-4 items-center flex-wrap">
+        {/* Account Grouping Filter - New filter added */}
+        <div className="relative">
+          <div
+            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[150px]"
+            onClick={() => toggleDropdown("accountGrouping")}
+          >
+            <span className="text-[12px] text-gray-600">
+              Account Grouping: {getFilterDisplayText("accountGroupings")}
+            </span>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+          {openDropdown === "accountGrouping" && (
+            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+              {filterOptions.accountGroupings.map((grouping) => (
+                <div
+                  key={grouping}
+                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleFilterChange("accountGroupings", grouping)
+                  }}
+                >
+                  <div
+                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                      grouping === "All"
+                        ? filters.accountGroupings.length === 0
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                        : filters.accountGroupings.includes(grouping)
+                          ? "bg-blue-500 border-blue-500"
+                          : "border-gray-300"
+                    }`}
+                  >
+                    {(grouping === "All" && filters.accountGroupings.length === 0) ||
+                    (grouping !== "All" && filters.accountGroupings.includes(grouping)) ? (
+                      <Check className="w-3 h-3 text-white" />
+                    ) : null}
+                  </div>
+                  {grouping}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Age Filter - Updated to use checkboxes */}
         <div className="relative">
           <div
@@ -1859,7 +1956,10 @@ const AccountLandscape = () => {
                 {/* <th className="p-2 text-left">Account Tier</th> */}
                 <th className="p-2 text-left">Account Grouping</th>
                 <th className="p-2 text-left">SMA Patients</th>
-                <th className="p-2 text-left">SMA Patients <br />(Zolgensma Naive)</th>
+                <th className="p-2 text-left">
+                  SMA Patients <br />
+                  (Zolgensma Naive)
+                </th>
               </tr>
             </thead>
 
