@@ -1,3 +1,3 @@
-const api = 'https://hcp-hco-backend.onrender.com';
+const api = 'http://3.90.166.151:8000';
 
 export default api;

@@ -1227,7 +1227,7 @@ const USAMap = ({
 
         {/* Legend */}
         <div className="absolute bottom-0 right-0 bg-white p-2 rounded-md shadow-md text-xs z-10">
-          <div className="text-[10px] font-medium mb-1">Territories</div>
+          {/* <div className="text-[10px] font-medium mb-1">Territories</div>
           <div className="grid grid-cols-2 gap-1">
             {Object.entries(TERRITORY_COLORS)
               .filter(([key]) => key !== "DEFAULT")
@@ -1237,7 +1237,7 @@ const USAMap = ({
                   <span className="text-[8px]">{territory}</span>
                 </div>
               ))}
-          </div>
+          </div> */}
           <div className="mt-2 text-[10px] font-medium mb-1">HCO Types</div>
           <div className="grid grid-cols-2 gap-1">
             {Object.entries(groupingColors).map(([grouping, color]) => (
