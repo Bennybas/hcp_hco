@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
 import * as XLSX from "xlsx"
+// Import the state abbreviation to full name mapping
+import { ABBR_TO_STATE } from "../state_name"
 
 const HCPlandscape = () => {
   const navigate = useNavigate()
@@ -64,7 +66,7 @@ const HCPlandscape = () => {
       try {
         setIsLoading(true)
         // Fetch all data without year filter
-        const response = await fetch(`${api}/fetch-hcplandscape`)
+        const response = await fetch(`${api}/hcp-landscape`)
         const jsonData = await response.json()
 
         // Extract unique years from the data, filtering out 2016 and 2025
@@ -849,13 +851,32 @@ const HCPlandscape = () => {
     }
   }
 
-  // Handle bar click for segment charts
+  // Handle segment bar click - Updated to properly handle X-axis label clicks
   const handleSegmentBarClick = (data) => {
-    // Filter by segment
-    setFilters((prev) => ({
-      ...prev,
-      segment: data.segment,
-    }))
+    // If data is a string (segment name from XAxis), use it directly
+    const segment = typeof data === "string" ? data : data.segment
+
+    // Check if we're already filtering by this segment
+    if (filters.segment === segment) {
+      // Clear the segment filter if clicking the same segment again
+      setFilters((prev) => ({
+        ...prev,
+        segment: null,
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+        selectedPotentialDrug: null,
+      }))
+    } else {
+      // Set the filter for this specific segment
+      setFilters((prev) => ({
+        ...prev,
+        segment: segment,
+        // Clear other related filters
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+        selectedPotentialDrug: null,
+      }))
+    }
   }
 
   // Clear all filters
@@ -1040,7 +1061,7 @@ const HCPlandscape = () => {
                       onChange={() => {}}
                       className="mr-2"
                     />
-                    {state}
+                    {ABBR_TO_STATE[state] || state}
                   </div>
                 ))}
               </div>
@@ -1124,7 +1145,7 @@ const HCPlandscape = () => {
               onClick={() => toggleDropdown("age")}
             >
               <span className="text-[12px] text-gray-600">
-                Age: {filters.ages.length > 0 ? filters.ages.join(", ") : "All"}
+                Patients Age: {filters.ages.length > 0 ? filters.ages.join(", ") : "All"}
               </span>
               <ChevronDown className="w-4 h-4" />
             </div>
@@ -1162,7 +1183,7 @@ const HCPlandscape = () => {
 
           {filters.states.length > 0 && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
-              States: {filters.states.join(", ")}
+              States: {filters.states.map((state) => ABBR_TO_STATE[state] || state).join(", ")}
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, states: [] }))}
                 className="ml-1 text-blue-600 hover:text-blue-800"
@@ -1190,7 +1211,7 @@ const HCPlandscape = () => {
           {filters.segment && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               Segment: {filters.segment}
-              {filters.selectedAgeGroup && ` (Age: ${filters.selectedAgeGroup})`}
+              {filters.selectedAgeGroup && ` (Patient Age: ${filters.selectedAgeGroup})`}
               {filters.selectedSpecialty && ` (Specialty: ${filters.selectedSpecialty})`}
               {filters.selectedPotentialDrug && ` (Drug: ${filters.selectedPotentialDrug})`}
               <button
@@ -1356,7 +1377,12 @@ const HCPlandscape = () => {
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={potential_data} margin={{ top: 10, right: 30, left: -20, bottom: 40 }} barSize={40}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+                <XAxis
+                  dataKey="segment"
+                  tick={{ fontSize: 10, cursor: "pointer" }}
+                  onClick={(data) => handleSegmentBarClick(data.value)}
+                  cursor="pointer"
+                />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
                 <Legend
@@ -1417,7 +1443,12 @@ const HCPlandscape = () => {
             <BarChart data={hcpsplit_age} barSize={50}>
               <CartesianGrid strokeDasharray="3 3" />
 
-              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="segment"
+                tick={{ fontSize: 10, cursor: "pointer" }}
+                onClick={(data) => handleSegmentBarClick(data.value)}
+                cursor="pointer"
+              />
 
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
 
@@ -1429,9 +1460,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="<2"
+                name="<2"
                 stackId="a"
                 fill={filters.selectedAgeGroup === "<2" ? "#1a5a7c" : "#2c84b0"}
-                onClick={(data) => handleAgeGroupBarClick(data, "<2")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, "<2")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1446,9 +1478,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="3-17"
+                name="3-17"
                 stackId="a"
                 fill={filters.selectedAgeGroup === "3-17" ? "#5a6a7c" : "#8295ae"}
-                onClick={(data) => handleAgeGroupBarClick(data, "3-17")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, "3-17")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1463,10 +1496,11 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey=">18"
+                name=">18"
                 stackId="a"
                 fill={filters.selectedAgeGroup === ">18" ? "#7a9ab0" : "#addaf0"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleAgeGroupBarClick(data, ">18")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, ">18")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1506,7 +1540,12 @@ const HCPlandscape = () => {
           <ResponsiveContainer width="100%" height="80%" style={{ marginRight: -10, marginBottom: -20 }}>
             <BarChart data={hcpsplit_specialty_data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }} barSize={60}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="segment"
+                tick={{ fontSize: 10, cursor: "pointer" }}
+                onClick={(data) => handleSegmentBarClick(data.value)}
+                cursor="pointer"
+              />
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
               <Tooltip
                 contentStyle={{ fontSize: 10 }}
@@ -1516,9 +1555,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="Child Neurology"
+                name="Child Neurology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Child Neurology" ? "#3a4a5a" : "#5d708a"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Child Neurology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Child Neurology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1532,9 +1572,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Neurology"
+                name="Neurology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Neurology" ? "#5a8a9c" : "#7cb1cc"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Neurology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Neurology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1548,9 +1589,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Neuromuscular"
+                name="Neuromuscular"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Neuromuscular" ? "#9a6a9a" : "#c39ac9"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Neuromuscular")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Neuromuscular")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1564,9 +1606,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Pediatric"
+                name="Pediatric"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Pediatric" ? "#0a3a5a" : "#1f5f86"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Pediatric")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Pediatric")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1580,9 +1623,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Radiology"
+                name="Radiology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Radiology" ? "#7a5a9a" : "#a686c1"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Radiology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Radiology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1596,9 +1640,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="NP/PA"
+                name="NP/PA"
                 stackId="a"
                 fill={filters.selectedSpecialty === "NP/PA" ? "#6a7ac0" : "#8ea2e0"}
-                onClick={(data) => handleSpecialtyBarClick(data, "NP/PA")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "NP/PA")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1612,10 +1657,11 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="All Others"
+                name="All Others"
                 stackId="a"
                 fill={filters.selectedSpecialty === "All Others" ? "#bf9a73" : "#dfb793"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleSpecialtyBarClick(data, "All Others")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "All Others")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}

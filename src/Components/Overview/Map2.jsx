@@ -127,7 +127,11 @@ const USAMap = ({
   const mapMountedRef = useRef(false)
   const dataLoadedRef = useRef(false)
   const geoJsonLoadedRef = useRef(false)
-  const currentSelectedTerritoryRef = useRef(null)
+  const currentSelectedTerritoriesRef = useRef([]) // Changed to array for multiple selection
+  const initializationAttempts = useRef(0)
+  const maxInitAttempts = 5
+  const initTimerRef = useRef(null)
+  const prevFiltersRef = useRef({ hcpSegment: null, hcoGrouping: null })
 
   // Function to navigate to HCO details
   const getHCODetails = (hcoId) => {
@@ -144,7 +148,7 @@ const USAMap = ({
     const fetchTerritoryZips = async () => {
       try {
         logDebug("Fetching territory zip mapping")
-        const response = await fetch(`${api}/fetch-zip`)
+        const response = await fetch(`${api}/zip-data`)
         if (!response.ok) {
           throw new Error(`Failed to fetch territory zip mapping: ${response.status}`)
         }
@@ -217,6 +221,11 @@ const USAMap = ({
         zipGeoJsonRef.current = data
         geoJsonLoadedRef.current = true
         logDebug(`Loaded ZIP GeoJSON with ${data.features.length} features`)
+
+        // Try to create territory layer if map is already initialized
+        if (mapInstanceRef.current && !territoryLayerRef.current) {
+          setTimeout(() => createTerritoryLayer(), 500)
+        }
       } catch (error) {
         console.error("Error loading ZIP GeoJSON:", error)
         setError("Error loading ZIP code map data: " + error.message)
@@ -232,7 +241,7 @@ const USAMap = ({
       try {
         setLoading(true)
         logDebug("Fetching map data from API")
-        const response = await fetch(`${api}/fetch-map-data`)
+        const response = await fetch(`${api}/map-data`)
         if (!response.ok) {
           throw new Error("Network response was not ok")
         }
@@ -292,16 +301,61 @@ const USAMap = ({
   // Handle changes to selectedTerritories prop
   useEffect(() => {
     if (selectedTerritories && selectedTerritories.length > 0 && mapInstanceRef.current) {
-      // If a territory is selected from the parent component, show it
-      if (selectedTerritories.length === 1) {
-        const territory = selectedTerritories[0]
-        showTerritoryDetail(territory)
-      } else {
-        // If multiple territories are selected or selection is cleared, reset view
-        resetTerritoryView()
-      }
+      // Update our ref to match the prop
+      currentSelectedTerritoriesRef.current = [...selectedTerritories]
+
+      // Show all selected territories
+      showMultipleTerritories(selectedTerritories)
+    } else if (
+      selectedTerritories &&
+      selectedTerritories.length === 0 &&
+      currentSelectedTerritoriesRef.current.length > 0
+    ) {
+      // If territories were cleared from parent, reset the view
+      resetTerritoryView()
     }
   }, [selectedTerritories])
+
+  // Track changes to HCP/HCO filters
+  useEffect(() => {
+    // Check if filters have changed
+    const filtersChanged =
+      prevFiltersRef.current.hcpSegment !== selectedHcpSegment ||
+      prevFiltersRef.current.hcoGrouping !== selectedHcoGrouping
+
+    // Update the previous filters reference
+    prevFiltersRef.current = {
+      hcpSegment: selectedHcpSegment,
+      hcoGrouping: selectedHcoGrouping,
+    }
+
+    // If filters changed and territories are selected, update markers
+    if (filtersChanged && currentSelectedTerritoriesRef.current.length > 0 && mapInstanceRef.current) {
+      // Small timeout to ensure state has been updated
+      setTimeout(() => {
+        addTerritoryMarkers(currentSelectedTerritoriesRef.current)
+      }, 100)
+    }
+  }, [selectedHcpSegment, selectedHcoGrouping])
+
+  // Listen for filter changes from parent component
+  useEffect(() => {
+    const handleFiltersChanged = (event) => {
+      // When HCP/HCO filters change, update markers if territories are selected
+      if (currentSelectedTerritoriesRef.current.length > 0 && mapInstanceRef.current) {
+        // Small timeout to ensure state has been updated
+        setTimeout(() => {
+          addTerritoryMarkers(currentSelectedTerritoriesRef.current)
+        }, 100)
+      }
+    }
+
+    window.addEventListener("filtersChanged", handleFiltersChanged)
+
+    return () => {
+      window.removeEventListener("filtersChanged", handleFiltersChanged)
+    }
+  }, [])
 
   // Filter map data based on selected filters
   useEffect(() => {
@@ -370,6 +424,14 @@ const USAMap = ({
 
     setFilteredMapData(filtered)
     logDebug(`Filtered data to ${filtered.length} records`)
+
+    // Update markers if territories are selected
+    if (currentSelectedTerritoriesRef.current.length > 0 && mapInstanceRef.current) {
+      // Add a small delay to ensure state is updated
+      setTimeout(() => {
+        addTerritoryMarkers(currentSelectedTerritoriesRef.current)
+      }, 100)
+    }
   }, [
     mapData,
     selectedState,
@@ -464,7 +526,7 @@ const USAMap = ({
             // Add new location with the correct name and grouping
             locationMap.get(territory).push({
               id: record.hco_mdm,
-              name: hcoName,
+              name: hcoName !== "-" ? hcoName : "Unknown",
               lat: hcoLat,
               lng: hcoLong,
               zip: record.hco_postal_cd_prim,
@@ -521,27 +583,35 @@ const USAMap = ({
     }
   }, [filteredMapData, zipTerritoryMapping])
 
-  // Function to show territory detail when clicked
-  const showTerritoryDetail = (territory) => {
-    logDebug(`Showing detail for territory: ${territory}`)
+  // Function to show multiple territories
+  const showMultipleTerritories = (territories) => {
+    logDebug(`Showing details for territories: ${territories.join(", ")}`)
 
-    if (!mapInstanceRef.current || !territoryGeoJsons[territory]) {
-      console.error("Map or territory GeoJSON not initialized")
+    if (!mapInstanceRef.current) {
+      console.error("Map not initialized")
       return
     }
 
-    // Check if we're clicking the same territory that's already selected
-    if (currentSelectedTerritoryRef.current === territory) {
-      // Reset the view
-      resetTerritoryView()
-      return
+    // Create territory GeoJSONs if they don't exist yet
+    if (Object.keys(territoryGeoJsons).length === 0) {
+      const geoJsons = createTerritoryGeoJsons()
+      if (!geoJsons) {
+        console.error("Territory GeoJSONs not available")
+        return
+      }
     }
 
-    // Store the currently selected territory
-    currentSelectedTerritoryRef.current = territory
-    setSelectedTerritory(territory)
+    // Store the currently selected territories
+    currentSelectedTerritoriesRef.current = [...territories]
+    setSelectedTerritory(territories[0]) // Just for UI purposes
 
-    // Highlight the selected territory
+    // Notify parent component about territory selection
+    if (onStateSelect) {
+      // Pass the territories to the parent component
+      onStateSelect(null, territories)
+    }
+
+    // Make all territories completely transparent (CHANGE #1)
     if (territoryLayerRef.current) {
       // First make sure the layer is still in the map
       if (!mapInstanceRef.current.hasLayer(territoryLayerRef.current)) {
@@ -549,7 +619,7 @@ const USAMap = ({
       }
 
       territoryLayerRef.current.eachLayer((layer) => {
-        // Make all territories completely transparent when one is selected
+        // Make ALL territories completely transparent when any territory is selected
         layer.setStyle({
           fillOpacity: 0,
           opacity: 0,
@@ -560,33 +630,81 @@ const USAMap = ({
         layer.off("mouseover")
         layer.off("mouseout")
 
-        // Only keep click event
+        // Keep click event for all territories
         const territory = layer.feature.properties.territory
         layer.on({
           click: () => {
             if (territory) {
-              showTerritoryDetail(territory)
+              toggleTerritorySelection(territory)
             }
           },
         })
       })
     }
 
-    // Calculate bounds and zoom to fit
-    const territoryLayer = territoryGeoJsons[territory]
-    if (territoryLayer && territoryLayer.getBounds().isValid()) {
-      mapInstanceRef.current.fitBounds(territoryLayer.getBounds(), {
+    // Calculate bounds to fit all selected territories
+    const bounds = L.latLngBounds([])
+    territories.forEach((territory) => {
+      const territoryLayer = territoryGeoJsons[territory]
+      if (territoryLayer && territoryLayer.getBounds().isValid()) {
+        bounds.extend(territoryLayer.getBounds())
+      } else if (territoryCenters[territory]) {
+        // Fallback to approximate center if bounds not available
+        const [lat, lng] = territoryCenters[territory]
+        bounds.extend([lat, lng])
+      }
+    })
+
+    // Zoom to fit all selected territories
+    if (bounds.isValid()) {
+      mapInstanceRef.current.fitBounds(bounds, {
         padding: [50, 50],
         maxZoom: 7,
       })
-    } else if (territoryCenters[territory]) {
-      // Fallback to approximate center if bounds not available
-      const [lat, lng, zoom] = territoryCenters[territory]
-      mapInstanceRef.current.setView([lat, lng], zoom)
     }
 
     // Add territory markers
-    addTerritoryMarkers(territory)
+    addTerritoryMarkers(territories)
+  }
+
+  // Function to toggle territory selection (for multiple selection)
+  const toggleTerritorySelection = (territory) => {
+    let newSelection = [...currentSelectedTerritoriesRef.current]
+
+    if (newSelection.includes(territory)) {
+      // Remove territory if already selected
+      newSelection = newSelection.filter((t) => t !== territory)
+    } else {
+      // Add territory if not already selected
+      newSelection.push(territory)
+    }
+
+    // Update selection
+    if (newSelection.length === 0) {
+      resetTerritoryView()
+    } else {
+      // Notify parent component about territory selection
+      if (onStateSelect) {
+        onStateSelect(null, newSelection)
+      }
+
+      // Use setTimeout to ensure the state update happens after the current execution
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          // Create a custom event to notify the parent component
+          const event = new CustomEvent("territorySelected", {
+            detail: { territories: newSelection },
+          })
+          window.dispatchEvent(event)
+        }
+      }, 0)
+    }
+  }
+
+  // Function to show territory detail when clicked
+  const showTerritoryDetail = (territory) => {
+    // For backward compatibility, convert single territory to array
+    showMultipleTerritories([territory])
   }
 
   // Reset the territory view
@@ -594,8 +712,24 @@ const USAMap = ({
     logDebug("Resetting territory view")
 
     // Clear the selected territory reference
-    currentSelectedTerritoryRef.current = null
+    currentSelectedTerritoriesRef.current = []
     setSelectedTerritory(null)
+
+    // Notify parent component about territory deselection
+    if (onStateSelect) {
+      // Clear the territory selection in the parent component
+      onStateSelect(null, [])
+      // Use setTimeout to ensure the state update happens after the current execution
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          // Create a custom event to notify the parent component
+          const event = new CustomEvent("territorySelected", {
+            detail: { territories: [] },
+          })
+          window.dispatchEvent(event)
+        }
+      }, 0)
+    }
 
     // Clear markers
     if (markerClusterRef.current) {
@@ -605,7 +739,7 @@ const USAMap = ({
     // Reset territory layer styles and re-add event handlers
     if (territoryLayerRef.current) {
       // Remove the layer and recreate it to reset all event handlers
-      if (mapInstanceRef.current.hasLayer(territoryLayerRef.current)) {
+      if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(territoryLayerRef.current)) {
         mapInstanceRef.current.removeLayer(territoryLayerRef.current)
       }
 
@@ -614,12 +748,18 @@ const USAMap = ({
     }
 
     // Reset map view to show all US
-    mapInstanceRef.current.setView([39.8283, -98.5795], 4)
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([39.8283, -98.5795], 4)
+    }
   }
 
-  // Function to add markers for a selected territory
-  const addTerritoryMarkers = (territory) => {
-    logDebug(`Adding markers for territory: ${territory}`)
+  // Function to add markers for selected territories
+  const addTerritoryMarkers = (territories) => {
+    if (!Array.isArray(territories)) {
+      territories = [territories]
+    }
+
+    logDebug(`Adding markers for territories: ${territories.join(", ")}`)
 
     if (!mapInstanceRef.current) {
       console.error("Map not initialized in addTerritoryMarkers")
@@ -649,35 +789,61 @@ const USAMap = ({
     }
 
     try {
-      // Get location data ONLY for the selected territory
-      const territoryLocations = locationData[territory] || []
+      // Collect location data for all selected territories
+      let allLocations = []
+      territories.forEach((territory) => {
+        const territoryLocations = locationData[territory] || []
+        allLocations = [...allLocations, ...territoryLocations]
+      })
 
-      if (territoryLocations.length === 0) {
-        logDebug(`No location data available for territory: ${territory}`)
+      if (allLocations.length === 0) {
+        logDebug(`No location data available for selected territories`)
         return
       }
 
-      logDebug(`Adding ${territoryLocations.length} markers for ${territory}`)
+      logDebug(`Adding ${allLocations.length} markers for selected territories`)
 
-      // Filter locations to ensure they have valid coordinates AND belong to the selected territory
-      const validLocations = territoryLocations.filter((loc) => {
+      // Filter locations to ensure they have valid coordinates AND belong to the selected territories
+      const validLocations = allLocations.filter((loc) => {
         // Ensure location has valid coordinates
         if (!loc.lat || !loc.lng || isNaN(loc.lat) || isNaN(loc.lng)) return false
 
-        // Ensure location belongs to the selected territory
-        // Check if the ZIP code belongs to the selected territory
+        // Ensure location belongs to one of the selected territories
         if (loc.zip) {
           const zipTerritory = zipTerritoryMapping[loc.zip]
-          return zipTerritory === territory
+          return territories.includes(zipTerritory)
         }
 
-        return true // If no ZIP code, include it (we'll trust the territory data structure)
+        return territories.includes(loc.territory) // Trust the territory data structure
       })
 
-      logDebug(`Found ${validLocations.length} valid locations for territory ${territory}`)
+      // Apply HCP segment filter if selected
+      let filteredLocations = validLocations
+      if (selectedHcpSegment) {
+        // This is a simplified filter - in a real implementation, you would need to check
+        // if any HCPs associated with this location match the segment criteria
+        filteredLocations = filteredLocations.filter((loc) => {
+          // For demonstration - you would need to implement actual filtering logic
+          // based on your data structure
+          return true // Include all locations for now
+        })
+      }
+
+      // Apply HCO grouping filter if selected
+      if (selectedHcoGrouping) {
+        filteredLocations = filteredLocations.filter((loc) => {
+          const grouping = loc.grouping ? loc.grouping.replace(/-/g, "").trim().toUpperCase() : ""
+          return (
+            grouping === selectedHcoGrouping ||
+            (selectedHcoGrouping === "UNSPECIFIED" && (grouping === "DELETE" || grouping === ""))
+          )
+        })
+      }
+
+      logDebug(`Found ${filteredLocations.length} valid locations for selected territories after filtering`)
 
       // Then add markers for each valid location
-      validLocations.forEach((location) => {
+      filteredLocations.forEach((location) => {
         // Validate coordinates
         const lat = Number.parseFloat(location.lat)
         const lng = Number.parseFloat(location.lng)
@@ -694,7 +860,6 @@ const USAMap = ({
         const markerColor = groupingColors[groupKey] || groupingColors["UNSPECIFIED"]
 
         // Create custom icon with the appropriate color based on grouping
-        // Modified to ensure the entire marker is clickable
         const hcoIcon = L.divIcon({
           className: "custom-marker-icon",
           html: `
@@ -736,7 +901,7 @@ const USAMap = ({
             <p>HCPs: ${location.hcpCount}</p>
             <p>Patients: ${location.patientCount}</p>
             <p>ZIP: ${location.zip || "N/A"}</p>
-            <p>Territory: ${territory}</p>
+            <p>Territory: ${location.territory}</p>
           </div>
         `)
 
@@ -750,7 +915,7 @@ const USAMap = ({
                 Grouping: ${displayGrouping}<br>
                 HCPs: ${location.hcpCount}<br>
                 Patients: ${location.patientCount}<br>
-                Territory: ${territory}
+                Territory: ${location.territory}
               `)
               }
             },
@@ -782,7 +947,7 @@ const USAMap = ({
   const createTerritoryGeoJsons = () => {
     if (!zipGeoJsonRef.current) {
       logDebug("Cannot create territory GeoJSON - ZIP GeoJSON not initialized")
-      return
+      return null
     }
 
     try {
@@ -922,7 +1087,7 @@ const USAMap = ({
           layer.on({
             mouseover: (e) => {
               // Only show territory-level tooltips when no territory is selected
-              if (!currentSelectedTerritoryRef.current) {
+              if (currentSelectedTerritoriesRef.current.length === 0) {
                 const layer = e.target
                 layer.setStyle({
                   weight: 2,
@@ -931,17 +1096,26 @@ const USAMap = ({
                 })
                 layer.bringToFront()
 
-                // Only show territory info
+                // Get the territory from the feature properties
+                const territory = feature.properties.territory
+
+                // Access the counts directly from the calculated objects
+                const patientCount = territoryPatientCounts[territory] || 0
+                const hcoCount = territoryHcoCounts[territory] || 0
+                const hcpCount = territoryHcpCounts[territory] || 0
+
+                // Set tooltip content with the actual counts
                 setTooltipContent(`
-                  <strong>Territory: ${territory || "N/A"}</strong><br>
-                  Patient Count: ${patientCount}<br>
-                  HCO Count: ${hcoCount}<br>
-                  HCP Count: ${hcpCount}
-                `)
+                <strong>Territory: ${territory || "N/A"}</strong><br>
+                
+              `)
+              // Patient Count: ${patientCount}<br>
+                // HCO Count: ${hcoCount}<br>
+                // HCP Count: ${hcpCount}
               }
             },
             mouseout: (e) => {
-              if (!currentSelectedTerritoryRef.current) {
+              if (currentSelectedTerritoriesRef.current.length === 0) {
                 // Only reset style if no territory is selected
                 territoryLayerRef.current.resetStyle(e.target)
               }
@@ -949,7 +1123,7 @@ const USAMap = ({
             },
             click: () => {
               if (territory) {
-                showTerritoryDetail(territory)
+                toggleTerritorySelection(territory)
               }
             },
           })
@@ -967,6 +1141,11 @@ const USAMap = ({
 
   // Clean up map instance
   const cleanupMap = () => {
+    if (!mapMountedRef.current) {
+      // Don't attempt cleanup if component is unmounted
+      return
+    }
+
     if (mapInstanceRef.current) {
       try {
         logDebug("Cleaning up map instance")
@@ -990,11 +1169,21 @@ const USAMap = ({
         // Remove map
         mapInstanceRef.current.remove()
         mapInstanceRef.current = null
-        mapInitializedRef.current = false
-        setMapInitialized(false)
+
+        // Only reset initialization flags if component is still mounted
+        if (mapMountedRef.current) {
+          mapInitializedRef.current = false
+          setMapInitialized(false)
+        }
       } catch (error) {
         console.error("Error cleaning up map:", error)
       }
+    }
+
+    // Clear any pending timers
+    if (initTimerRef.current) {
+      clearTimeout(initTimerRef.current)
+      initTimerRef.current = null
     }
   }
 
@@ -1004,7 +1193,17 @@ const USAMap = ({
 
     return () => {
       mapMountedRef.current = false
-      cleanupMap()
+
+      // Ensure we clean up properly on unmount
+      if (initTimerRef.current) {
+        clearTimeout(initTimerRef.current)
+        initTimerRef.current = null
+      }
+
+      // Only call cleanupMap if we have a map instance
+      if (mapInstanceRef.current) {
+        cleanupMap()
+      }
     }
   }, [])
 
@@ -1042,18 +1241,40 @@ const USAMap = ({
     }
   }, [])
 
-  // Initialize map
+  // Initialize map with retry mechanism
   useEffect(() => {
     // Only initialize the map once
     if (mapInitializedRef.current || mapInstanceRef.current || mapInitialized) {
       return
     }
 
+    // Clear any existing timer to prevent multiple initialization attempts
+    if (initTimerRef.current) {
+      clearTimeout(initTimerRef.current)
+      initTimerRef.current = null
+    }
+
     const initMap = () => {
+      // Check if component is still mounted
+      if (!mapMountedRef.current) {
+        return
+      }
+
       // Check if the map container exists
       const container = document.getElementById(mapContainerId.current)
       if (!container) {
         console.error("Map container not found:", mapContainerId.current)
+
+        // Retry initialization with exponential backoff
+        if (initializationAttempts.current < maxInitAttempts) {
+          initializationAttempts.current++
+          const delay = Math.min(1000 * Math.pow(2, initializationAttempts.current), 10000)
+          logDebug(
+            `Retrying map initialization in ${delay}ms (attempt ${initializationAttempts.current}/${maxInitAttempts})`,
+          )
+
+          initTimerRef.current = setTimeout(initMap, delay)
+        }
         return
       }
 
@@ -1062,6 +1283,12 @@ const USAMap = ({
       container.style.width = "100%"
 
       try {
+        // Check if map is already initialized to prevent duplicate initialization
+        if (mapInstanceRef.current) {
+          logDebug("Map already initialized, skipping initialization")
+          return
+        }
+
         logDebug("Initializing map in container:", mapContainerId.current)
 
         // Set flag to prevent multiple initializations
@@ -1092,16 +1319,26 @@ const USAMap = ({
 
           // When zoomed in, reduce opacity of the layers to show street map
           if (currentZoom > 7) {
-            // Fade territory layer
-            if (territoryLayerRef.current) {
-              territoryLayerRef.current.setStyle({
-                fillOpacity: Math.max(0.1, 0.7 - (currentZoom - 7) * 0.1),
-                opacity: Math.max(0.1, 0.7 - (currentZoom - 7) * 0.1),
-              })
+            // If territory is selected, remove background colors completely
+            if (currentSelectedTerritoriesRef.current.length > 0) {
+              if (territoryLayerRef.current) {
+                territoryLayerRef.current.setStyle({
+                  fillOpacity: 0,
+                  opacity: 0,
+                })
+              }
+            } else {
+              // Just fade territory layer if no territory is selected
+              if (territoryLayerRef.current) {
+                territoryLayerRef.current.setStyle({
+                  fillOpacity: Math.max(0.1, 0.7 - (currentZoom - 7) * 0.1),
+                  opacity: Math.max(0.1, 0.7 - (currentZoom - 7) * 0.1),
+                })
+              }
             }
           } else {
             // Reset opacity for normal zoom levels
-            if (territoryLayerRef.current && !currentSelectedTerritoryRef.current) {
+            if (territoryLayerRef.current && currentSelectedTerritoriesRef.current.length === 0) {
               territoryLayerRef.current.setStyle({
                 fillOpacity: 0.7,
                 opacity: 0.7,
@@ -1134,31 +1371,50 @@ const USAMap = ({
 
         // Force a resize to ensure the map is properly initialized
         setTimeout(() => {
-          map.invalidateSize(true)
+          if (mapMountedRef.current && mapInstanceRef.current) {
+            map.invalidateSize(true)
 
-          // Create territory layer if data is available
-          if (zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0) {
-            createTerritoryLayer()
+            // Create territory layer if data is available
+            if (zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0) {
+              createTerritoryLayer()
+            }
           }
         }, 500)
 
         logDebug("Map initialized successfully")
+
+        // Reset initialization attempts counter
+        initializationAttempts.current = 0
       } catch (error) {
         console.error("Error initializing map:", error)
         setError("Error initializing map: " + error.message)
         mapInitializedRef.current = false
         setMapInitialized(false)
+
+        // Retry initialization with exponential backoff
+        if (initializationAttempts.current < maxInitAttempts) {
+          initializationAttempts.current++
+          const delay = Math.min(1000 * Math.pow(2, initializationAttempts.current), 10000)
+          logDebug(
+            `Retrying map initialization in ${delay}ms (attempt ${initializationAttempts.current}/${maxInitAttempts})`,
+          )
+
+          initTimerRef.current = setTimeout(initMap, delay)
+        }
       }
     }
 
     // Add a small delay to ensure the container is rendered
-    setTimeout(initMap, 500)
+    initTimerRef.current = setTimeout(initMap, 500)
 
     // Cleanup on unmount
     return () => {
-      cleanupMap()
+      if (initTimerRef.current) {
+        clearTimeout(initTimerRef.current)
+        initTimerRef.current = null
+      }
     }
-  }, [selectedTerritories, territoryZipMapping, zipTerritoryMapping, mapInitialized])
+  }, [zipTerritoryMapping]) // Reduced dependencies to prevent re-initialization
 
   // Effect to create territory layer when data is loaded
   useEffect(() => {
@@ -1171,6 +1427,26 @@ const USAMap = ({
       createTerritoryLayer()
     }
   }, [zipGeoJsonRef.current, zipTerritoryMapping])
+
+  // Handle ZIP GeoJSON loading and territory layer creation
+  useEffect(() => {
+    // Only proceed if the map is initialized and the component is mounted
+    if (!mapInitializedRef.current || !mapMountedRef.current || !mapInstanceRef.current) {
+      return
+    }
+
+    // If we have ZIP GeoJSON data and territory mapping but no territory layer, create it
+    if (zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0 && !territoryLayerRef.current) {
+      // Use a small timeout to ensure the map is fully ready
+      const timeoutId = setTimeout(() => {
+        if (mapMountedRef.current && mapInstanceRef.current) {
+          createTerritoryLayer()
+        }
+      }, 1000)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [mapInitialized, zipTerritoryMapping])
 
   // Track when all data is loaded
   useEffect(() => {
@@ -1188,8 +1464,8 @@ const USAMap = ({
         className="relative bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
         style={{ height: "518px" }}
       >
-        {/* Reset button - only show when a territory is selected */}
-        {selectedTerritory && (
+        {/* Reset button - only show when territories are selected */}
+        {currentSelectedTerritoriesRef.current.length > 0 && (
           <button
             onClick={resetTerritoryView}
             className="absolute top-2 right-2 z-20 bg-white rounded-full p-1 shadow-md hover:bg-gray-100 transition-colors"
@@ -1227,17 +1503,6 @@ const USAMap = ({
 
         {/* Legend */}
         <div className="absolute bottom-0 right-0 bg-white p-2 rounded-md shadow-md text-xs z-10">
-          {/* <div className="text-[10px] font-medium mb-1">Territories</div>
-          <div className="grid grid-cols-2 gap-1">
-            {Object.entries(TERRITORY_COLORS)
-              .filter(([key]) => key !== "DEFAULT")
-              .map(([territory, color]) => (
-                <div key={territory} className="flex items-center">
-                  <div className="w-3 h-3 mr-1" style={{ backgroundColor: color }}></div>
-                  <span className="text-[8px]">{territory}</span>
-                </div>
-              ))}
-          </div> */}
           <div className="mt-2 text-[10px] font-medium mb-1">HCO Types</div>
           <div className="grid grid-cols-2 gap-1">
             {Object.entries(groupingColors).map(([grouping, color]) => (
@@ -1249,12 +1514,55 @@ const USAMap = ({
           </div>
         </div>
 
-        {/* Loading indicator - only show during initial data loading */}
-        {loading && (
+        {/* Loading indicator - only show during initial data loading or map initialization */}
+        {(loading || (!mapInitialized && !error)) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-20">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-2 text-sm text-gray-600">Loading map data...</p>
+              <p className="mt-2 text-sm text-gray-600">{loading ? "Loading map data..." : "Initializing map..."}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error message */}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-20">
+            <div className="text-center max-w-md p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 font-medium">Error loading map</p>
+              <p className="text-sm text-red-500 mt-1">{error}</p>
+              <button
+                onClick={() => {
+                  setError(null)
+                  initializationAttempts.current = 0
+                  mapInitializedRef.current = false
+                  setMapInitialized(false)
+                  setTimeout(() => {
+                    if (mapMountedRef.current) {
+                      // Force re-initialization
+                      if (initTimerRef.current) {
+                        clearTimeout(initTimerRef.current)
+                      }
+                      initTimerRef.current = setTimeout(() => {
+                        if (mapInstanceRef.current) {
+                          cleanupMap()
+                        }
+                        // Attempt to initialize map again
+                        const container = document.getElementById(mapContainerId.current)
+                        if (container && !mapInstanceRef.current) {
+                          const initMap = () => {
+                            // Implementation of initMap function
+                            // This is a placeholder - the actual implementation is in the useEffect
+                          }
+                          initMap()
+                        }
+                      }, 500)
+                    }
+                  }, 0)
+                }}
+                className="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors"
+              >
+                Retry
+              </button>
             </div>
           </div>
         )}

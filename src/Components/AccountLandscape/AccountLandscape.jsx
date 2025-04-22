@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
 import * as XLSX from "xlsx"
+// Import the state abbreviation to full name mapping
+import { ABBR_TO_STATE } from '../state_name'
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -92,7 +94,7 @@ const AccountLandscape = () => {
       try {
         setLoading(true)
 
-        const response = await fetch(`${api}/fetch-hcolandscape`)
+        const response = await fetch(`${api}/hco-landscape`)
         const jsonData = await response.json()
 
         const years = [...new Set(jsonData.map((item) => item.year))]
@@ -155,8 +157,18 @@ const AccountLandscape = () => {
     // Extract unique brands (drug names)
     const brands = ["All", ...new Set(data.map((item) => item.drug_name).filter((brand) => brand && brand !== "-"))]
 
-    // Extract unique states
-    const states = ["All", ...new Set(data.map((item) => item.hco_state).filter((state) => state && state !== "-"))]
+    // Extract unique states and sort alphabetically
+    const stateAbbrs = [...new Set(data.map((item) => item.hco_state).filter((state) => state && state !== "-"))]
+
+    // Sort states alphabetically by full name
+    const states = [
+      "All",
+      ...stateAbbrs.sort((a, b) => {
+        const stateNameA = ABBR_TO_STATE[a] || a
+        const stateNameB = ABBR_TO_STATE[b] || b
+        return stateNameA.localeCompare(stateNameB)
+      }),
+    ]
 
     // Extract unique account groupings
     const accountGroupings = [
@@ -1318,11 +1330,11 @@ const AccountLandscape = () => {
             <ChevronDown className="w-4 h-4" />
           </div>
           {openDropdown === "state" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+            <div className="absolute top-full left-0 -right-5 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
               {filterOptions.states.map((state) => (
                 <div
                   key={state}
-                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center p-2 text-[10px] hover:bg-gray-100 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleFilterChange("states", state)
@@ -1344,7 +1356,7 @@ const AccountLandscape = () => {
                       <Check className="w-3 h-3 text-white" />
                     ) : null}
                   </div>
-                  {state}
+                  {state === "All" ? state : ABBR_TO_STATE[state] || state}
                 </div>
               ))}
             </div>
