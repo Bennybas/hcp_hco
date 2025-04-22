@@ -9,7 +9,7 @@ import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
 import * as XLSX from "xlsx"
 // Import the state abbreviation to full name mapping
-import { ABBR_TO_STATE } from '../state_name'
+import { ABBR_TO_STATE } from "../state_name"
 
 const AccountLandscape = () => {
   const navigate = useNavigate()
@@ -786,6 +786,9 @@ const AccountLandscape = () => {
         result["Neurology"] +
         result["Neuromuscular"] +
         result["NP/PA"] +
+        +result["Neurology"] +
+        result["Neuromuscular"] +
+        result["NP/PA"] +
         result["Radiology"] +
         result["All Others"]
 
@@ -1100,6 +1103,31 @@ const AccountLandscape = () => {
     }
   }
 
+  // Handle click on x-axis label for HCO Group by Drug chart
+  const handleGroupLabelClick = (group) => {
+    // Check if we're already filtering by this group
+    if (filters.selectedGroup === group) {
+      // Clear the filter if clicking the same group again
+      setFilters((prev) => ({
+        ...prev,
+        selectedGroup: null,
+        selectedDrug: null,
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+      }))
+    } else {
+      // Set the filter for this specific group
+      setFilters((prev) => ({
+        ...prev,
+        selectedGroup: group,
+        // Clear other related filters
+        selectedDrug: null,
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+      }))
+    }
+  }
+
   // Clear all filters
   const clearAllFilters = () => {
     setFilters({
@@ -1175,6 +1203,26 @@ const AccountLandscape = () => {
 
     // Write the workbook and trigger download
     XLSX.writeFile(wb, fileName)
+  }
+
+  // Custom tick component for clickable x-axis labels
+  const CustomizedAxisTick = ({ x, y, payload, onClick }) => {
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text
+          x={0}
+          y={0}
+          dy={16}
+          textAnchor="middle"
+          fill="#666"
+          fontSize={8}
+          cursor="pointer"
+          onClick={() => onClick(payload.value)}
+        >
+          {payload.value}
+        </text>
+      </g>
+    )
   }
 
   if (loading) {
@@ -1270,7 +1318,7 @@ const AccountLandscape = () => {
                       <Check className="w-3 h-3 text-white" />
                     ) : null}
                   </div>
-                {age}
+                  {age}
                 </div>
               ))}
             </div>
@@ -1626,7 +1674,11 @@ const AccountLandscape = () => {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={hcoGroupByDrugData} margin={{ top: 10, right: 30, left: 0 }} barSize={40}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="group" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="group"
+                tick={(props) => <CustomizedAxisTick {...props} onClick={handleGroupLabelClick} />}
+                interval={0}
+              />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
               <Bar
@@ -1688,7 +1740,12 @@ const AccountLandscape = () => {
             <BarChart data={hcoGroupByAgeData} barSize={50}>
               <CartesianGrid strokeDasharray="3 3" />
 
-              <XAxis dataKey="group" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="group"
+                tick={(props) => <CustomizedAxisTick {...props} onClick={handleGroupLabelClick} />}
+                interval={0}
+                minTickGap={20}
+              />
 
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
 

@@ -1139,11 +1139,10 @@ const USAMap = ({
                 // Set tooltip content with the actual counts
                 setTooltipContent(`
                 <strong>Territory: ${territory || "N/A"}</strong><br>
-               
+                Patient Count: ${patientCount}<br>
+                HCO Count: ${hcoCount}<br>
+                HCP Count: ${hcpCount}
               `)
-              // Patient Count: ${patientCount}<br>
-              // HCO Count: ${hcoCount}<br>
-              // HCP Count: ${hcpCount}
               }
             },
             mouseout: (e) => {
@@ -1492,32 +1491,57 @@ const USAMap = ({
 
   // Handle ZIP GeoJSON loading and territory layer creation
   useEffect(() => {
-    // Only proceed if the map is initialized and the component is mounted
-    if (!mapInitializedRef.current || !mapMountedRef.current || !mapInstanceRef.current) {
+    // Only proceed if the component is mounted
+    if (!mapMountedRef.current) {
       return
     }
 
-    // If we have ZIP GeoJSON data and territory mapping but no territory layer, create it
-    if (zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0 && !territoryLayerRef.current) {
+    // If map is initialized and we have ZIP GeoJSON data and territory mapping, create the territory layer
+    if (mapInstanceRef.current && zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0) {
       // Use a small timeout to ensure the map is fully ready
       const timeoutId = setTimeout(() => {
         if (mapMountedRef.current && mapInstanceRef.current) {
+          // Force recreation of territory layer
+          if (territoryLayerRef.current && mapInstanceRef.current.hasLayer(territoryLayerRef.current)) {
+            mapInstanceRef.current.removeLayer(territoryLayerRef.current)
+            territoryLayerRef.current = null
+          }
           createTerritoryLayer()
+
+          // Force map to refresh
+          mapInstanceRef.current.invalidateSize(true)
         }
-      }, 1000)
+      }, 300)
 
       return () => clearTimeout(timeoutId)
     }
-  }, [mapInitialized, zipTerritoryMapping])
+  }, [mapInitialized, zipTerritoryMapping, mapData])
 
-  // Track when all data is loaded
+  // Add this useEffect after the other useEffects
   useEffect(() => {
-    // Check if map is initialized and data is loaded
-    if (mapInitialized && !loading && Object.keys(zipTerritoryMapping).length > 0) {
-      // Set all data loaded immediately without delay
-      setAllDataLoaded(true)
+    // Check if all data is loaded and map is initialized
+    if (allDataLoaded && mapInstanceRef.current) {
+      // Ensure territory layer is created and visible
+      if (!territoryLayerRef.current && zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0) {
+        logDebug("Creating territory layer after all data loaded")
+        createTerritoryLayer()
+      } else if (territoryLayerRef.current) {
+        // Make sure territory layer is visible
+        if (!mapInstanceRef.current.hasLayer(territoryLayerRef.current)) {
+          mapInstanceRef.current.addLayer(territoryLayerRef.current)
+        }
+
+        // Reset territory layer style to ensure visibility
+        territoryLayerRef.current.setStyle({
+          fillOpacity: 0.7,
+          opacity: 1,
+          weight: 1,
+        })
+
+        logDebug("Ensured territory layer visibility after all data loaded")
+      }
     }
-  }, [mapInitialized, loading, zipTerritoryMapping])
+  }, [allDataLoaded])
 
   return (
     <div className="flex flex-col gap-4">
