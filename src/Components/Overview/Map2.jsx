@@ -210,11 +210,14 @@ const USAMap = ({
 
   // Load ZIP code GeoJSON data
   useEffect(() => {
+    // Add error handling and logging for GeoJSON loading
     const fetchZipGeoJson = async () => {
       try {
         logDebug("Fetching ZIP GeoJSON data")
+        // Change the path to be more deployment-friendly
         const response = await fetch("/usa_zip_codes_geo_15m.json")
         if (!response.ok) {
+          console.error(`Failed to load ZIP GeoJSON: ${response.status} ${response.statusText}`)
           throw new Error(`Failed to load ZIP code GeoJSON: ${response.status}`)
         }
         const data = await response.json()
@@ -228,11 +231,40 @@ const USAMap = ({
         }
       } catch (error) {
         console.error("Error loading ZIP GeoJSON:", error)
-        setError("Error loading ZIP code map data: " + error.message)
+        // More detailed error message
+        setError(`Error loading ZIP code map data: ${error.message}. Make sure the GeoJSON file is properly deployed.`)
       }
     }
 
     fetchZipGeoJson()
+  }, [])
+
+  // Add this at the beginning of the component to ensure Leaflet CSS is loaded
+  useEffect(() => {
+    // Ensure Leaflet CSS is loaded
+    if (typeof document !== "undefined") {
+      const linkExists = document.querySelector('link[href*="leaflet.css"]')
+      if (!linkExists) {
+        const link = document.createElement("link")
+        link.rel = "stylesheet"
+        link.href = "https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        link.integrity =
+          "sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        link.crossOrigin = ""
+        document.head.appendChild(link)
+
+        // Also add MarkerCluster CSS
+        const clusterCss = document.createElement("link")
+        clusterCss.rel = "stylesheet"
+        clusterCss.href = "https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"
+        document.head.appendChild(clusterCss)
+
+        const clusterDefaultCss = document.createElement("link")
+        clusterDefaultCss.rel = "stylesheet"
+        clusterDefaultCss.href = "https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"
+        document.head.appendChild(clusterDefaultCss)
+      }
+    }
   }, [])
 
   // Fetch data from API
@@ -1107,11 +1139,11 @@ const USAMap = ({
                 // Set tooltip content with the actual counts
                 setTooltipContent(`
                 <strong>Territory: ${territory || "N/A"}</strong><br>
-                
+               
               `)
               // Patient Count: ${patientCount}<br>
-                // HCO Count: ${hcoCount}<br>
-                // HCP Count: ${hcpCount}
+              // HCO Count: ${hcoCount}<br>
+              // HCP Count: ${hcpCount}
               }
             },
             mouseout: (e) => {
@@ -1254,6 +1286,7 @@ const USAMap = ({
       initTimerRef.current = null
     }
 
+    // Modify the initMap function to be more robust for deployment
     const initMap = () => {
       // Check if component is still mounted
       if (!mapMountedRef.current) {
@@ -1296,22 +1329,33 @@ const USAMap = ({
         setMapInitialized(true)
 
         // Fix for Leaflet icon issue
-        delete L.Icon.Default.prototype._getIconUrl
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-          iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-          shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-        })
+        if (L.Icon && L.Icon.Default) {
+          delete L.Icon.Default.prototype._getIconUrl
+          L.Icon.Default.mergeOptions({
+            iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+            iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+            shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+          })
+        }
 
-        // Create map instance
-        const map = L.map(container, {
-          center: [39.8283, -98.5795], // Center of the US
-          zoom: 4,
-          minZoom: 3,
-          maxZoom: 18,
-          zoomControl: true,
-          worldCopyJump: true,
-        })
+        // Create map instance with a try-catch block
+        let map
+        try {
+          map = L.map(container, {
+            center: [39.8283, -98.5795], // Center of the US
+            zoom: 4,
+            minZoom: 3,
+            maxZoom: 18,
+            zoomControl: true,
+            worldCopyJump: true,
+          })
+        } catch (mapError) {
+          console.error("Error creating map instance:", mapError)
+          setError(`Error creating map: ${mapError.message}. Try refreshing the page.`)
+          mapInitializedRef.current = false
+          setMapInitialized(false)
+          return
+        }
 
         // Add zoom handler to fade colors on zoom
         map.on("zoomend", () => {
@@ -1347,39 +1391,57 @@ const USAMap = ({
           }
         })
 
-        // Add tile layer and store reference
-        const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        }).addTo(map)
+        // Add tile layer with error handling
+        try {
+          const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          }).addTo(map)
 
-        // Ensure tile layer is always on top
-        tileLayer.bringToFront()
+          // Ensure tile layer is always on top
+          tileLayer.bringToFront()
+        } catch (tileError) {
+          console.error("Error adding tile layer:", tileError)
+          // Continue anyway, as the map might still work without tiles
+        }
 
-        // Create marker cluster group
-        const markerCluster = L.markerClusterGroup({
-          showCoverageOnHover: false,
-          zoomToBoundsOnClick: true,
-          spiderfyOnMaxZoom: true,
-          disableClusteringAtZoom: 8,
-          maxClusterRadius: 80,
-        })
-        map.addLayer(markerCluster)
+        // Create marker cluster group with error handling
+        try {
+          const markerCluster = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            spiderfyOnMaxZoom: true,
+            disableClusteringAtZoom: 8,
+            maxClusterRadius: 80,
+          })
+          map.addLayer(markerCluster)
+          markerClusterRef.current = markerCluster
+        } catch (clusterError) {
+          console.error("Error creating marker cluster:", clusterError)
+          // Continue anyway, as the map might still work without clusters
+        }
 
-        // Save references
+        // Save map reference
         mapInstanceRef.current = map
-        markerClusterRef.current = markerCluster
 
         // Force a resize to ensure the map is properly initialized
         setTimeout(() => {
           if (mapMountedRef.current && mapInstanceRef.current) {
-            map.invalidateSize(true)
+            try {
+              map.invalidateSize(true)
+            } catch (resizeError) {
+              console.error("Error resizing map:", resizeError)
+            }
 
             // Create territory layer if data is available
             if (zipGeoJsonRef.current && Object.keys(zipTerritoryMapping).length > 0) {
-              createTerritoryLayer()
+              try {
+                createTerritoryLayer()
+              } catch (layerError) {
+                console.error("Error creating territory layer:", layerError)
+              }
             }
           }
-        }, 500)
+        }, 1000) // Increased timeout for deployment
 
         logDebug("Map initialized successfully")
 

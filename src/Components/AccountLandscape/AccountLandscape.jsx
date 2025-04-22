@@ -1240,7 +1240,7 @@ const AccountLandscape = () => {
             className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
             onClick={() => toggleDropdown("age")}
           >
-            <span className="text-[12px] text-gray-600">Age: {getFilterDisplayText("ageFilters")}</span>
+            <span className="text-[12px] text-gray-600"> Patients Age: {getFilterDisplayText("ageFilters")}</span>
             <ChevronDown className="w-4 h-4" />
           </div>
           {openDropdown === "age" && (
@@ -1270,7 +1270,7 @@ const AccountLandscape = () => {
                       <Check className="w-3 h-3 text-white" />
                     ) : null}
                   </div>
-                  {age}
+                {age}
                 </div>
               ))}
             </div>
