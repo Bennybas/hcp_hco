@@ -533,6 +533,9 @@ const Overview = () => {
       </div>
     )
   }
+  const favorites = JSON.parse(localStorage.getItem("hcpLandscapeFavorites") || "[]")
+  console.log(favorites)
+
 
   return (
     <>
@@ -805,7 +808,7 @@ const Overview = () => {
                 <div className="bg-[#e74a21]/10 rounded-full h-[1.2rem] w-[1.2rem] flex p-1 justify-center items-center">
                   <FaUserDoctor className="text-[#e74a21] h-[0.8rem] w-[0.8rem]" />
                 </div>
-                <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Ever</span>
+                <span className="text-gray-500 text-[11px] font-[500]">Zolgensma Prescribing HCOs</span>
               </div>
               <span className="text-gray-700 text-[16px] font-[500] pl-2">
                 {metrics.zolgemsmaEver.toLocaleString()}

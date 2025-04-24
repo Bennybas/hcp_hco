@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, ChevronRight, ChevronLeft, X, Check, Download } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronLeft, X, Check, Download, List,BookmarkPlus } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LabelList } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
@@ -11,12 +11,20 @@ import * as XLSX from "xlsx"
 // Import the state abbreviation to full name mapping
 import { ABBR_TO_STATE } from "../state_name"
 
-const AccountLandscape = () => {
+const AccountLandscape = ({selectedFavorite}) => {
   const navigate = useNavigate()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [openDropdown, setOpenDropdown] = useState(null)
   const dataFetchedRef = useRef(false)
+
+  // With these new state variables for favorites management
+  const [favorites, setFavorites] = useState([])
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false)
+  const [showAddFavoriteModal, setShowAddFavoriteModal] = useState(false)
+  const [favoriteName, setFavoriteName] = useState("")
+  const [favoriteNameError, setFavoriteNameError] = useState("")
+  const favoriteNameInputRef = useRef(null)
 
   const [expanded, setExpanded] = useState(false)
 
@@ -116,6 +124,9 @@ const AccountLandscape = () => {
         // Mark data as fetched
         dataFetchedRef.current = true
 
+        // Load saved filters after data is loaded
+        loadFavorites()
+
         setLoading(false)
       } catch (error) {
         console.error("Error fetching data:", error)
@@ -125,6 +136,11 @@ const AccountLandscape = () => {
 
     fetchData()
   }, []) // Empty dependency array ensures this runs only once on component mount
+
+  // Add a new useEffect to load favorites on component mount
+  useEffect(() => {
+    loadFavorites()
+  }, [])
 
   // Process data when filters change
   useEffect(() => {
@@ -139,6 +155,118 @@ const AccountLandscape = () => {
     const endIndex = startIndex + rowsPerPage
     setAccountTableData(allAccountTableData.slice(startIndex, endIndex))
   }, [currentPage, rowsPerPage, allAccountTableData])
+
+  // With this new loadFavorites function
+  const loadFavorites = () => {
+    try {
+      const savedFavoritesString = localStorage.getItem("accountLandscapeFavorites")
+      if (savedFavoritesString) {
+        const parsedFavorites = JSON.parse(savedFavoritesString)
+        setFavorites(parsedFavorites)
+      }
+    } catch (error) {
+      console.error("Error loading favorites:", error)
+    }
+  }
+
+  // With these new functions for favorites management
+  const openAddFavoriteModal = () => {
+    setShowAddFavoriteModal(true)
+    setFavoriteName("")
+    setFavoriteNameError("")
+    // Focus the input field when the modal opens
+    setTimeout(() => {
+      if (favoriteNameInputRef.current) {
+        favoriteNameInputRef.current.focus()
+      }
+    }, 100)
+  }
+
+  const closeAddFavoriteModal = () => {
+    setShowAddFavoriteModal(false)
+  }
+
+  const addToFavorites = () => {
+    if (!favoriteName.trim()) {
+      setFavoriteNameError("Please enter a name for this favorite")
+      return
+    }
+
+    try {
+      // Check if a favorite with this name already exists
+      const existingIndex = favorites.findIndex((fav) => fav.name === favoriteName.trim())
+
+      const now = new Date()
+      const timestamp = now.toLocaleString()
+
+      const newFavorite = {
+        name: favoriteName.trim(),
+        filters: { ...filters },
+        timestamp,
+      }
+
+      let updatedFavorites
+
+      if (existingIndex >= 0) {
+        // Update existing favorite
+        updatedFavorites = [...favorites]
+        updatedFavorites[existingIndex] = newFavorite
+      } else {
+        // Add new favorite
+        updatedFavorites = [...favorites, newFavorite]
+      }
+
+      setFavorites(updatedFavorites)
+      localStorage.setItem("accountLandscapeFavorites", JSON.stringify(updatedFavorites))
+
+      closeAddFavoriteModal()
+    } catch (error) {
+      console.error("Error adding to favorites:", error)
+      setFavoriteNameError("An error occurred while saving the favorite")
+    }
+  }
+
+  const removeFavorite = (index) => {
+    try {
+      const updatedFavorites = [...favorites]
+      updatedFavorites.splice(index, 1)
+      setFavorites(updatedFavorites)
+      localStorage.setItem("accountLandscapeFavorites", JSON.stringify(updatedFavorites))
+    } catch (error) {
+      console.error("Error removing favorite:", error)
+    }
+  }
+
+  const applyFavorite = (favorite) => {
+    setFilters(favorite.filters)
+    setShowFavoritesModal(false)
+    // Reset to first page when applying a favorite
+    setCurrentPage(1)
+  }
+   useEffect(() => {
+      if (selectedFavorite) {
+        applyFavorite(selectedFavorite);
+      }
+    }, [selectedFavorite]);
+
+  // Helper function to summarize filters for display
+  const getFilterSummary = (filterObj) => {
+    const summary = []
+
+    if (filterObj.years && filterObj.years.length > 0) summary.push(`Years: ${filterObj.years.join(", ")}`)
+
+    if (filterObj.brands && filterObj.brands.length > 0) summary.push(`Brands: ${filterObj.brands.join(", ")}`)
+
+    if (filterObj.ageFilters && filterObj.ageFilters.length > 0)
+      summary.push(`Ages: ${filterObj.ageFilters.join(", ")}`)
+
+    if (filterObj.states && filterObj.states.length > 0) summary.push(`States: ${filterObj.states.length} selected`)
+
+    if (filterObj.accountGroupings && filterObj.accountGroupings.length > 0)
+      summary.push(`Account Groups: ${filterObj.accountGroupings.length} selected`)
+
+    return summary.length > 0 ? summary.join(" • ") : "No active filters"
+  }
 
   const extractFilterOptions = (data) => {
     // Extract unique age groups
@@ -1236,242 +1364,279 @@ const AccountLandscape = () => {
   return (
     <div className="flex flex-col gap-4 w-full p-2">
       {/* Filters */}
-      <div className="flex gap-4 items-center flex-wrap">
-        {/* Account Grouping Filter - New filter added */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[150px]"
-            onClick={() => toggleDropdown("accountGrouping")}
-          >
-            <span className="text-[12px] text-gray-600">
-              Account Grouping: {getFilterDisplayText("accountGroupings")}
-            </span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "accountGrouping" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.accountGroupings.map((grouping) => (
-                <div
-                  key={grouping}
-                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleFilterChange("accountGroupings", grouping)
-                  }}
-                >
-                  <div
-                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
-                      grouping === "All"
-                        ? filters.accountGroupings.length === 0
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                        : filters.accountGroupings.includes(grouping)
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                    }`}
-                  >
-                    {(grouping === "All" && filters.accountGroupings.length === 0) ||
-                    (grouping !== "All" && filters.accountGroupings.includes(grouping)) ? (
-                      <Check className="w-3 h-3 text-white" />
-                    ) : null}
-                  </div>
-                  {grouping}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Age Filter - Updated to use checkboxes */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
-            onClick={() => toggleDropdown("age")}
-          >
-            <span className="text-[12px] text-gray-600"> Patients Age: {getFilterDisplayText("ageFilters")}</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "age" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.ages.map((age) => (
-                <div
-                  key={age}
-                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleFilterChange("ageFilters", age)
-                  }}
-                >
-                  <div
-                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
-                      age === "All"
-                        ? filters.ageFilters.length === 0
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                        : filters.ageFilters.includes(age)
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                    }`}
-                  >
-                    {(age === "All" && filters.ageFilters.length === 0) ||
-                    (age !== "All" && filters.ageFilters.includes(age)) ? (
-                      <Check className="w-3 h-3 text-white" />
-                    ) : null}
-                  </div>
-                  {age}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Brand Filter - Updated to use checkboxes */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
-            onClick={() => toggleDropdown("brand")}
-          >
-            <span className="text-[12px] text-gray-600">Brand: {getFilterDisplayText("brands")}</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "brand" && (
-            <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.brands.map((brand) => (
-                <div
-                  key={brand}
-                  className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleFilterChange("brands", brand)
-                  }}
-                >
-                  <div
-                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
-                      brand === "All"
-                        ? filters.brands.length === 0
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                        : filters.brands.includes(brand)
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                    }`}
-                  >
-                    {(brand === "All" && filters.brands.length === 0) ||
-                    (brand !== "All" && filters.brands.includes(brand)) ? (
-                      <Check className="w-3 h-3 text-white" />
-                    ) : null}
-                  </div>
-                  {brand}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* State Filter - Updated to use checkboxes */}
-        <div className="relative">
-          <div
-            className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
-            onClick={() => toggleDropdown("state")}
-          >
-            <span className="text-[12px] text-gray-600">State: {getFilterDisplayText("states")}</span>
-            <ChevronDown className="w-4 h-4" />
-          </div>
-          {openDropdown === "state" && (
-            <div className="absolute top-full left-0 -right-5 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
-              {filterOptions.states.map((state) => (
-                <div
-                  key={state}
-                  className="flex items-center p-2 text-[10px] hover:bg-gray-100 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleFilterChange("states", state)
-                  }}
-                >
-                  <div
-                    className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
-                      state === "All"
-                        ? filters.states.length === 0
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                        : filters.states.includes(state)
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                    }`}
-                  >
-                    {(state === "All" && filters.states.length === 0) ||
-                    (state !== "All" && filters.states.includes(state)) ? (
-                      <Check className="w-3 h-3 text-white" />
-                    ) : null}
-                  </div>
-                  {state === "All" ? state : ABBR_TO_STATE[state] || state}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Active Filters Display */}
-        {filters.selectedQuarter !== null && filters.selectedYear !== null && (
-          <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
-            Quarter: {filters.selectedYear}-Q{filters.selectedQuarter}
-            {filters.selectedDrug && ` (${filters.selectedDrug})`}
-            <button
-              onClick={() =>
-                setFilters((prev) => ({ ...prev, selectedQuarter: null, selectedYear: null, selectedDrug: null }))
-              }
-              className="ml-1 text-blue-600 hover:text-blue-800"
+      <div className="flex justify-between items-center">
+        <div className="flex gap-4 items-center flex-wrap">
+          {/* Account Grouping Filter - New filter added */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[150px]"
+              onClick={() => toggleDropdown("accountGrouping")}
             >
-              <X size={12} />
-            </button>
+              <span className="text-[12px] text-gray-600">
+                Account Grouping: {getFilterDisplayText("accountGroupings")}
+              </span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "accountGrouping" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.accountGroupings.map((grouping) => (
+                  <div
+                    key={grouping}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("accountGroupings", grouping)
+                    }}
+                  >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        grouping === "All"
+                          ? filters.accountGroupings.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.accountGroupings.includes(grouping)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(grouping === "All" && filters.accountGroupings.length === 0) ||
+                      (grouping !== "All" && filters.accountGroupings.includes(grouping)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    {grouping}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
 
-        {filters.selectedFacilityType && (
-          <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
-            Facility Type: {filters.selectedFacilityType}
-            <button
-              onClick={() => setFilters((prev) => ({ ...prev, selectedFacilityType: null }))}
-              className="ml-1 text-blue-600 hover:text-blue-800"
+          {/* Age Filter - Updated to use checkboxes */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("age")}
             >
-              <X size={12} />
-            </button>
+              <span className="text-[12px] text-gray-600"> Patients Age: {getFilterDisplayText("ageFilters")}</span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "age" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.ages.map((age) => (
+                  <div
+                    key={age}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("ageFilters", age)
+                    }}
+                  >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        age === "All"
+                          ? filters.ageFilters.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.ageFilters.includes(age)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(age === "All" && filters.ageFilters.length === 0) ||
+                      (age !== "All" && filters.ageFilters.includes(age)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    {age}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
 
-        {filters.selectedGroup && (
-          <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
-            Group: {filters.selectedGroup}
-            {filters.selectedDrug && ` (Drug: ${filters.selectedDrug})`}
-            {filters.selectedAgeGroup && ` (Age: ${filters.selectedAgeGroup})`}
-            {filters.selectedSpecialty && ` (Specialty: ${filters.selectedSpecialty})`}
-            <button
-              onClick={() =>
-                setFilters((prev) => ({
-                  ...prev,
-                  selectedGroup: null,
-                  selectedDrug: null,
-                  selectedAgeGroup: null,
-                  selectedSpecialty: null,
-                }))
-              }
-              className="ml-1 text-blue-600 hover:text-blue-800"
+          {/* Brand Filter - Updated to use checkboxes */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("brand")}
             >
-              <X size={12} />
-            </button>
+              <span className="text-[12px] text-gray-600">Brand: {getFilterDisplayText("brands")}</span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "brand" && (
+              <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.brands.map((brand) => (
+                  <div
+                    key={brand}
+                    className="flex items-center p-2 text-[12px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("brands", brand)
+                    }}
+                  >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        brand === "All"
+                          ? filters.brands.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.brands.includes(brand)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(brand === "All" && filters.brands.length === 0) ||
+                      (brand !== "All" && filters.brands.includes(brand)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    {brand}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Clear All Filters Button */}
-        {hasActiveFilters() && (
+          {/* State Filter - Updated to use checkboxes */}
+          <div className="relative">
+            <div
+              className="flex items-center py-1 px-2 rounded-lg bg-white justify-between cursor-pointer min-w-[120px]"
+              onClick={() => toggleDropdown("state")}
+            >
+              <span className="text-[12px] text-gray-600">State: {getFilterDisplayText("states")}</span>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {openDropdown === "state" && (
+              <div className="absolute top-full left-0 -right-5 mt-1 bg-white border rounded-md shadow-md z-10 w-full max-h-40 overflow-y-auto">
+                {filterOptions.states.map((state) => (
+                  <div
+                    key={state}
+                    className="flex items-center p-2 text-[10px] hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleFilterChange("states", state)
+                    }}
+                  >
+                    <div
+                      className={`w-4 h-4 mr-2 border rounded flex items-center justify-center ${
+                        state === "All"
+                          ? filters.states.length === 0
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                          : filters.states.includes(state)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300"
+                      }`}
+                    >
+                      {(state === "All" && filters.states.length === 0) ||
+                      (state !== "All" && filters.states.includes(state)) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    {state === "All" ? state : ABBR_TO_STATE[state] || state}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active Filters Display */}
+          {filters.selectedQuarter !== null && filters.selectedYear !== null && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              Quarter: {filters.selectedYear}-Q{filters.selectedQuarter}
+              {filters.selectedDrug && ` (${filters.selectedDrug})`}
+              <button
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, selectedQuarter: null, selectedYear: null, selectedDrug: null }))
+                }
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {filters.selectedFacilityType && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              Facility Type: {filters.selectedFacilityType}
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, selectedFacilityType: null }))}
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {filters.selectedGroup && (
+            <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
+              Group: {filters.selectedGroup}
+              {filters.selectedDrug && ` (Drug: ${filters.selectedDrug})`}
+              {filters.selectedAgeGroup && ` (Age: ${filters.selectedAgeGroup})`}
+              {filters.selectedSpecialty && ` (Specialty: ${filters.selectedSpecialty})`}
+              <button
+                onClick={() =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    selectedGroup: null,
+                    selectedDrug: null,
+                    selectedAgeGroup: null,
+                    selectedSpecialty: null,
+                  }))
+                }
+                className="ml-1 text-blue-600 hover:text-blue-800"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Favorites Buttons */}
+        <div className="flex items-center gap-2">
+                  {/* Clear All Filters Button */}
+          {hasActiveFilters() && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            >
+              <X size={14} />
+              Clear Filters
+            </button>
+          )}
           <button
-            onClick={clearAllFilters}
-            className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            onClick={openAddFavoriteModal}
+            disabled={!hasActiveFilters()}
+            className={`flex items-center gap-1 text-[12px] px-2 py-1 rounded-lg ${
+              hasActiveFilters()
+                ? "text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100"
+                : "text-green-600 bg-green-100 cursor-not-allowed"
+            }`}
           >
-            <X size={14} />
-            Clear Filters
+            <BookmarkPlus size={14} />
+            Add to Favorites
           </button>
-        )}
+
+          <button
+            onClick={() => setShowFavoritesModal(true)}
+            disabled={favorites.length === 0}
+            className={`flex items-center gap-1 text-[12px] px-2 py-1 rounded-lg ${
+              favorites.length > 0
+                ? "text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100"
+                : "text-blue-600 bg-blue-50 cursor-not-allowed"
+            }`}
+          >
+            <List size={14} />
+            View Favorites
+            {favorites.length > 0 && (
+              <span className="ml-1 bg-blue-200 text-blue-800 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+                {favorites.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+
       </div>
 
       {/* KPI Cards */}
@@ -2099,6 +2264,113 @@ const AccountLandscape = () => {
           </div>
         )}
       </div>
+      {/* Add to Favorites Modal */}
+      {showAddFavoriteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Save to Favorites</h3>
+
+            <div className="mb-4">
+              <label htmlFor="favoriteName" className="block text-sm font-medium text-gray-700 mb-1">
+                Favorite Name
+              </label>
+              <input
+                ref={favoriteNameInputRef}
+                type="text"
+                id="favoriteName"
+                className={`w-full px-3 py-2 border rounded-md shadow-sm ${
+                  favoriteNameError ? "border-red-500" : "border-gray-300"
+                } focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+                value={favoriteName}
+                onChange={(e) => {
+                  setFavoriteName(e.target.value)
+                  if (e.target.value.trim()) setFavoriteNameError("")
+                }}
+                placeholder="Enter a name for this favorite"
+              />
+              {favoriteNameError && <p className="mt-1 text-sm text-red-600">{favoriteNameError}</p>}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                onClick={closeAddFavoriteModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                  !favoriteName.trim() ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                }`}
+                onClick={addToFavorites}
+                disabled={!favoriteName.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Favorites Modal */}
+      {showFavoritesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-3xl max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">My Favorites</h3>
+              <button onClick={() => setShowFavoritesModal(false)} className="text-gray-400 hover:text-gray-500">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {favorites.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">You haven't saved any favorites yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {favorites.map((favorite, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{favorite.name}</h4>
+                          <p className="text-xs text-gray-500">Saved on {favorite.timestamp}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => applyFavorite(favorite)}
+                            className="text-sm text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg"
+                          >
+                            Apply
+                          </button>
+                          <button
+                            onClick={() => removeFavorite(index)}
+                            className="text-sm text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-600 break-words">{getFilterSummary(favorite.filters)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
