@@ -1,15 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { FaUserDoctor } from "react-icons/fa6"
-import { ChevronDown, X, Download } from "lucide-react"
+import { ChevronDown, X, Download, Clock, BookmarkPlus, List, Check } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, LabelList, Legend } from "recharts"
 import { useNavigate } from "react-router-dom"
 import api from "../api/api"
 import { PropagateLoader } from "react-spinners"
 import * as XLSX from "xlsx"
+// Import the state abbreviation to full name mapping
+import { ABBR_TO_STATE } from "../state_name"
 
-const HCPlandscape = () => {
+const HCPlandscape = ({selectedFavorite}) => {
   const navigate = useNavigate()
   const [data, setData] = useState([])
   const [kpiData, setKpiData] = useState({
@@ -29,6 +31,16 @@ const HCPlandscape = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  // Favorites state
+  const [favorites, setFavorites] = useState([])
+  const [showFavoriteModal, setShowFavoriteModal] = useState(false)
+  const [favoriteName, setFavoriteName] = useState("")
+  const [showFavoritesList, setShowFavoritesList] = useState(false)
+  const favoriteNameInputRef = useRef(null)
+
+
+  
 
   // Filters
   const [filters, setFilters] = useState({
@@ -64,7 +76,7 @@ const HCPlandscape = () => {
       try {
         setIsLoading(true)
         // Fetch all data without year filter
-        const response = await fetch(`${api}/fetch-hcplandscape`)
+        const response = await fetch(`${api}/hcp-landscape`)
         const jsonData = await response.json()
 
         // Extract unique years from the data, filtering out 2016 and 2025
@@ -87,6 +99,9 @@ const HCPlandscape = () => {
         // Process data for visualizations
         processData(jsonData)
 
+        // Load favorites from localStorage
+        loadFavorites()
+
         setIsLoading(false)
       } catch (error) {
         console.error("Error fetching data:", error)
@@ -107,6 +122,188 @@ const HCPlandscape = () => {
       processData(filteredData)
     }
   }, [filters])
+
+  // Load favorites from localStorage
+  const loadFavorites = () => {
+    try {
+      const savedFavorites = localStorage.getItem("hcpLandscapeFavorites")
+      if (savedFavorites) {
+        setFavorites(JSON.parse(savedFavorites))
+      }
+    } catch (error) {
+      console.error("Error loading favorites:", error)
+    }
+  }
+
+  // Save favorites to localStorage
+  const saveFavorites = (updatedFavorites) => {
+    try {
+      localStorage.setItem("hcpLandscapeFavorites", JSON.stringify(updatedFavorites))
+      setFavorites(updatedFavorites)
+    } catch (error) {
+      console.error("Error saving favorites:", error)
+    }
+  }
+
+  // Add current filters to favorites
+  const addToFavorites = () => {
+    if (!favoriteName.trim()) return
+
+    const newFavorite = {
+      id: Date.now(),
+      name: favoriteName,
+      filters: { ...filters },
+      timestamp: new Date().toISOString(),
+    }
+
+    const updatedFavorites = [...favorites, newFavorite]
+    saveFavorites(updatedFavorites)
+    setFavoriteName("")
+    setShowFavoriteModal(false)
+  }
+
+  // Remove a favorite
+  const removeFavorite = (id) => {
+    const updatedFavorites = favorites.filter((favorite) => favorite.id !== id)
+    saveFavorites(updatedFavorites)
+  }
+
+  // Apply a favorite's filters
+  const applyFavorite = (favorite) => {
+
+    setFilters(favorite.filters)
+    setShowFavoritesList(false)
+  }
+
+  useEffect(() => {
+    if (selectedFavorite) {
+      // Set the filters state
+      setFilters(selectedFavorite.filters);
+      
+      // If data is already loaded, manually trigger data processing
+      if (data.length > 0) {
+        // Get filtered data based on the favorite's filters
+        const filteredData = getFilteredDataWithFilters(data, selectedFavorite.filters);
+        
+        // Process the filtered data
+        processData(filteredData);
+      }
+    }
+  }, [selectedFavorite, data]);
+
+  // Format timestamp for display
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString()
+  }
+
+  // Add this helper function to filter data with specific filters
+  const getFilteredDataWithFilters = (data, filterSettings) => {
+    return data.filter((item) => {
+      // Year filter - check if any selected years match or if no years are selected
+      if (filterSettings.years.length > 0 && !filterSettings.years.includes(item.year)) return false
+
+      // Brand filter - check if any selected brands match or if no brands are selected
+      if (filterSettings.brands.length > 0 && !filterSettings.brands.includes(item.drug_name)) return false
+
+      // Age filter - check if any selected ages match or if no ages are selected
+      if (filterSettings.ages.length > 0 && !filterSettings.ages.includes(item.age_group)) return false
+
+      // State filter - check if any selected states match either hcp_state or ref_hcp_state
+      if (filterSettings.states.length > 0) {
+        const hcpState = item.hcp_state || ""
+        const refHcpState = item.ref_hcp_state || ""
+
+        // If neither state matches any of the selected states, filter out this item
+        if (!filterSettings.states.some((state) => state === hcpState || state === refHcpState)) {
+          return false
+        }
+      }
+
+      // HCP Segment filter - check if any selected segments match
+      if (filterSettings.hcpSegments.length > 0 && !filterSettings.hcpSegments.includes(item.hcp_segment)) return false
+
+      // Quarter and Year filter
+      if (filterSettings.selectedQuarter !== null && filterSettings.selectedYear !== null) {
+        // Convert to string for comparison since API data might have string values
+        const itemYear = String(item.year)
+        const itemQuarter = String(item.quarter)
+        const filterYear = String(filterSettings.selectedYear)
+        const filterQuarter = String(filterSettings.selectedQuarter)
+
+        if (itemYear !== filterYear || itemQuarter !== filterQuarter) {
+          return false
+        }
+      }
+
+      // Individual drug filter for specific quarter-year combination
+      if (
+        filterSettings.selectedDrug !== null &&
+        filterSettings.selectedQuarter !== null &&
+        filterSettings.selectedYear !== null
+      ) {
+        // Convert to string for comparison since API data might have string values
+        const itemYear = String(item.year)
+        const itemQuarter = String(item.quarter)
+        const filterYear = String(filterSettings.selectedYear)
+        const filterQuarter = String(filterSettings.selectedQuarter)
+
+        if (
+          itemYear !== filterYear ||
+          itemQuarter !== filterQuarter ||
+          item.drug_name !== filterSettings.selectedDrug
+        ) {
+          return false
+        }
+      }
+
+      // Segment filter
+      if (filterSettings.segment && item.hcp_segment !== filterSettings.segment) return false
+
+      // Age group filter
+      if (filterSettings.selectedAgeGroup) {
+        const ageMapping = {
+          "<2": "0 to 2",
+          "3-17": "3 to 17",
+          ">18": "Above 18",
+        }
+
+        if (item.age_group !== ageMapping[filterSettings.selectedAgeGroup]) return false
+      }
+
+      // Specialty filter
+      if (filterSettings.selectedSpecialty) {
+        const specialtyMapping = {
+          "Child Neurology": "CHILD NEUROLOGY",
+          Neurology: "NEUROLOGY",
+          Neuromuscular: "NEUROMUSCULAR",
+          Pediatric: "PEDIATRIC",
+          Radiology: "RADIOLOGY",
+          "NP/PA": "NP/PA",
+        }
+
+        const apiSpecialty = specialtyMapping[filterSettings.selectedSpecialty]
+        if (!apiSpecialty) {
+          // Handle "All Others" case
+          if (filterSettings.selectedSpecialty === "All Others") {
+            const mainSpecialties = Object.values(specialtyMapping)
+            if (mainSpecialties.includes(item.final_spec?.toUpperCase())) return false
+          } else {
+            return false
+          }
+        } else if (item.final_spec?.toUpperCase() !== apiSpecialty) {
+          return false
+        }
+      }
+
+      // Potential drug filter
+      if (filterSettings.selectedPotentialDrug && item.drug_name !== filterSettings.selectedPotentialDrug) {
+        return false
+      }
+
+      return true
+    })
+  }
 
   const getFilteredData = () => {
     return data.filter((item) => {
@@ -849,13 +1046,32 @@ const HCPlandscape = () => {
     }
   }
 
-  // Handle bar click for segment charts
+  // Handle segment bar click - Updated to properly handle X-axis label clicks
   const handleSegmentBarClick = (data) => {
-    // Filter by segment
-    setFilters((prev) => ({
-      ...prev,
-      segment: data.segment,
-    }))
+    // If data is a string (segment name from XAxis), use it directly
+    const segment = typeof data === "string" ? data : data.segment
+
+    // Check if we're already filtering by this segment
+    if (filters.segment === segment) {
+      // Clear the segment filter if clicking the same segment again
+      setFilters((prev) => ({
+        ...prev,
+        segment: null,
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+        selectedPotentialDrug: null,
+      }))
+    } else {
+      // Set the filter for this specific segment
+      setFilters((prev) => ({
+        ...prev,
+        segment: segment,
+        // Clear other related filters
+        selectedAgeGroup: null,
+        selectedSpecialty: null,
+        selectedPotentialDrug: null,
+      }))
+    }
   }
 
   // Clear all filters
@@ -964,6 +1180,15 @@ const HCPlandscape = () => {
     XLSX.writeFile(wb, fileName)
   }
 
+  // Focus the favorite name input when the modal opens
+  useEffect(() => {
+    if (showFavoriteModal && favoriteNameInputRef.current) {
+      setTimeout(() => {
+        favoriteNameInputRef.current.focus()
+      }, 100)
+    }
+  }, [showFavoriteModal])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1040,7 +1265,7 @@ const HCPlandscape = () => {
                       onChange={() => {}}
                       className="mr-2"
                     />
-                    {state}
+                    {ABBR_TO_STATE[state] || state}
                   </div>
                 ))}
               </div>
@@ -1124,7 +1349,7 @@ const HCPlandscape = () => {
               onClick={() => toggleDropdown("age")}
             >
               <span className="text-[12px] text-gray-600">
-                Age: {filters.ages.length > 0 ? filters.ages.join(", ") : "All"}
+                Patients Age: {filters.ages.length > 0 ? filters.ages.join(", ") : "All"}
               </span>
               <ChevronDown className="w-4 h-4" />
             </div>
@@ -1162,7 +1387,7 @@ const HCPlandscape = () => {
 
           {filters.states.length > 0 && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
-              States: {filters.states.join(", ")}
+              States: {filters.states.map((state) => ABBR_TO_STATE[state] || state).join(", ")}
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, states: [] }))}
                 className="ml-1 text-blue-600 hover:text-blue-800"
@@ -1190,7 +1415,7 @@ const HCPlandscape = () => {
           {filters.segment && (
             <div className="flex items-center bg-blue-100 text-blue-800 rounded-lg px-2 py-1 text-[11px]">
               Segment: {filters.segment}
-              {filters.selectedAgeGroup && ` (Age: ${filters.selectedAgeGroup})`}
+              {filters.selectedAgeGroup && ` (Patient Age: ${filters.selectedAgeGroup})`}
               {filters.selectedSpecialty && ` (Specialty: ${filters.selectedSpecialty})`}
               {filters.selectedPotentialDrug && ` (Drug: ${filters.selectedPotentialDrug})`}
               <button
@@ -1211,17 +1436,165 @@ const HCPlandscape = () => {
           )}
         </div>
 
-        {/* Clear All Filters Button */}
-        {hasActiveFilters() && (
+        {/* Favorites Buttons */}
+        <div className="flex items-center gap-2">
+          {/* Clear All Filters Button */}
+            {hasActiveFilters() && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+              >
+                <X size={14} />
+                Clear Filters
+              </button>
+            )}
           <button
-            onClick={clearAllFilters}
-            className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            onClick={() => setShowFavoriteModal(true)}
+            className="flex items-center gap-1 text-[12px] text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-lg"
+            disabled={!hasActiveFilters()}
+            title={hasActiveFilters() ? "Add current filters to favorites" : "Apply filters first"}
           >
-            <X size={14} />
-            Clear Filters
+            <BookmarkPlus size={14} />
+            Add to Favorites
           </button>
+
+          <button
+            onClick={() => setShowFavoritesList(true)}
+            className="flex items-center gap-1 text-[12px] text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg"
+            disabled={favorites.length === 0}
+            title={favorites.length > 0 ? "View saved favorites" : "No favorites saved yet"}
+          >
+            <List size={14} />
+            View Favorites
+            {favorites.length > 0 && (
+              <span className="ml-1 bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                {favorites.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        
+      </div>
+
+      {/* Add to Favorites Modal */}
+      {showFavoriteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
+            <h3 className="text-lg font-semibold mb-4">Save Filter as Favorite</h3>
+            <div className="mb-4">
+              <label htmlFor="favoriteName" className="block text-sm font-medium text-gray-700 mb-1">
+                Favorite Name
+              </label>
+              <input
+                ref={favoriteNameInputRef}
+                type="text"
+                id="favoriteName"
+                value={favoriteName}
+                onChange={(e) => setFavoriteName(e.target.value)}
+                placeholder="Enter a name for this favorite"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowFavoriteModal(false)}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addToFavorites}
+                disabled={!favoriteName.trim()}
+                className={`px-4 py-2 text-sm text-white rounded-md ${
+                  favoriteName.trim() ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-300 cursor-not-allowed"
+                }`}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Favorites Modal */}
+      {showFavoritesList && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium text-gray-900">Saved Favorites</h3>
+        <button onClick={() => setShowFavoritesList(false)} className="text-gray-400 hover:text-gray-500">
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="overflow-y-auto flex-1">
+        {favorites.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">No favorites saved yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {favorites.map((favorite) => (
+              <div key={favorite.id} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{favorite.name}</h4>
+                    <div className="flex items-center text-xs text-gray-500 mt-1">
+                      <Clock size={12} className="mr-1" />
+                      <span>{formatTimestamp(favorite.timestamp)}</span>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-600">
+                      {favorite.filters.years.length > 0 && (
+                        <span className="inline-block bg-gray-100 rounded px-2 py-1 mr-1 mb-1">
+                          Years: {favorite.filters.years.join(", ")}
+                        </span>
+                      )}
+                      {favorite.filters.brands.length > 0 && (
+                        <span className="inline-block bg-gray-100 rounded px-2 py-1 mr-1 mb-1">
+                          Brands: {favorite.filters.brands.join(", ")}
+                        </span>
+                      )}
+                      {favorite.filters.ages.length > 0 && (
+                        <span className="inline-block bg-gray-100 rounded px-2 py-1 mr-1 mb-1">
+                          Ages: {favorite.filters.ages.join(", ")}
+                        </span>
+                      )}
+                      {favorite.filters.states.length > 0 && (
+                        <span className="inline-block bg-gray-100 rounded px-2 py-1 mr-1 mb-1">
+                          States: {favorite.filters.states.join(", ")}
+                        </span>
+                      )}
+                      {favorite.filters.hcpSegments.length > 0 && (
+                        <span className="inline-block bg-gray-100 rounded px-2 py-1 mr-1 mb-1">
+                          Segments: {favorite.filters.hcpSegments.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => applyFavorite(favorite)}
+                      className="text-blue-600 text-sm hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded p-1"
+                      title="Apply this favorite"
+                    >
+                       Apply
+                    </button>
+                    <button
+                      onClick={() => removeFavorite(favorite.id)}
+                      className="text-red-600 text-sm hover:text-red-800 bg-red-50 hover:bg-red-100 rounded p-1"
+                      title="Remove this favorite"
+                    >
+                       Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
+    </div>
+  </div>
+)}
 
       {/* KPI Cards */}
       <div className="flex gap-4 w-full">
@@ -1356,7 +1729,12 @@ const HCPlandscape = () => {
             <ResponsiveContainer width="100%" height="90%">
               <BarChart data={potential_data} margin={{ top: 10, right: 30, left: -20, bottom: 40 }} barSize={40}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+                <XAxis
+                  dataKey="segment"
+                  tick={{ fontSize: 10, cursor: "pointer" }}
+                  onClick={(data) => handleSegmentBarClick(data.value)}
+                  cursor="pointer"
+                />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(value) => `${value}`} labelStyle={{ fontSize: 11 }} itemStyle={{ fontSize: 10 }} />
                 <Legend
@@ -1417,7 +1795,12 @@ const HCPlandscape = () => {
             <BarChart data={hcpsplit_age} barSize={50}>
               <CartesianGrid strokeDasharray="3 3" />
 
-              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="segment"
+                tick={{ fontSize: 10, cursor: "pointer" }}
+                onClick={(data) => handleSegmentBarClick(data.value)}
+                cursor="pointer"
+              />
 
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
 
@@ -1429,9 +1812,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="<2"
+                name="<2"
                 stackId="a"
                 fill={filters.selectedAgeGroup === "<2" ? "#1a5a7c" : "#2c84b0"}
-                onClick={(data) => handleAgeGroupBarClick(data, "<2")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, "<2")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1446,9 +1830,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="3-17"
+                name="3-17"
                 stackId="a"
                 fill={filters.selectedAgeGroup === "3-17" ? "#5a6a7c" : "#8295ae"}
-                onClick={(data) => handleAgeGroupBarClick(data, "3-17")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, "3-17")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1463,10 +1848,11 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey=">18"
+                name=">18"
                 stackId="a"
                 fill={filters.selectedAgeGroup === ">18" ? "#7a9ab0" : "#addaf0"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleAgeGroupBarClick(data, ">18")}
+                onClick={(data, index) => handleAgeGroupBarClick(data, ">18")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1506,7 +1892,12 @@ const HCPlandscape = () => {
           <ResponsiveContainer width="100%" height="80%" style={{ marginRight: -10, marginBottom: -20 }}>
             <BarChart data={hcpsplit_specialty_data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }} barSize={60}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="segment" tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey="segment"
+                tick={{ fontSize: 10, cursor: "pointer" }}
+                onClick={(data) => handleSegmentBarClick(data.value)}
+                cursor="pointer"
+              />
               <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" tickFormatter={(value) => Math.round(value)} />
               <Tooltip
                 contentStyle={{ fontSize: 10 }}
@@ -1516,9 +1907,10 @@ const HCPlandscape = () => {
 
               <Bar
                 dataKey="Child Neurology"
+                name="Child Neurology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Child Neurology" ? "#3a4a5a" : "#5d708a"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Child Neurology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Child Neurology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1532,9 +1924,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Neurology"
+                name="Neurology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Neurology" ? "#5a8a9c" : "#7cb1cc"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Neurology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Neurology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1548,9 +1941,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Neuromuscular"
+                name="Neuromuscular"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Neuromuscular" ? "#9a6a9a" : "#c39ac9"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Neuromuscular")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Neuromuscular")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1564,9 +1958,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Pediatric"
+                name="Pediatric"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Pediatric" ? "#0a3a5a" : "#1f5f86"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Pediatric")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Pediatric")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1580,9 +1975,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="Radiology"
+                name="Radiology"
                 stackId="a"
                 fill={filters.selectedSpecialty === "Radiology" ? "#7a5a9a" : "#a686c1"}
-                onClick={(data) => handleSpecialtyBarClick(data, "Radiology")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "Radiology")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1596,9 +1992,10 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="NP/PA"
+                name="NP/PA"
                 stackId="a"
                 fill={filters.selectedSpecialty === "NP/PA" ? "#6a7ac0" : "#8ea2e0"}
-                onClick={(data) => handleSpecialtyBarClick(data, "NP/PA")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "NP/PA")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
@@ -1612,10 +2009,11 @@ const HCPlandscape = () => {
               </Bar>
               <Bar
                 dataKey="All Others"
+                name="All Others"
                 stackId="a"
                 fill={filters.selectedSpecialty === "All Others" ? "#bf9a73" : "#dfb793"}
                 radius={[10, 10, 0, 0]}
-                onClick={(data) => handleSpecialtyBarClick(data, "All Others")}
+                onClick={(data, index) => handleSpecialtyBarClick(data, "All Others")}
                 cursor="pointer"
               >
                 {/* Only show label if value is significant */}
